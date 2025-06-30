@@ -1,100 +1,170 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Deezer Preview Player with Proxy</title>
+  <meta charset="UTF-8" />
+  <title>Finish the Lyric Musical Chairs</title>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 800px;
-      margin: auto;
-      padding: 20px;
-    }
-    .played {
-      color: gray;
-    }
-    ul li {
-      cursor: pointer;
-      margin: 4px 0;
-    }
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+    h1 { text-align: center; }
+    #audio { width: 100%; margin-bottom: 10px; }
+    #songInfo, #infoLine { text-align: center; margin-bottom: 10px; font-size: 1.2rem; }
+    #pauseTimer { text-align: center; font-size: 3rem; font-weight: bold; margin-bottom: 10px; }
+    #progress-container { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    #progress { flex: 1; }
+    #controls { display: flex; justify-content: center; gap: 20px; margin-bottom: 20px; }
+    #controls button { padding: 20px 32px; font-size: 1.5rem; border-radius: 8px; background-color: #007BFF; color: #fff; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); touch-action: manipulation; }
+    #controls button:active { background-color: #0056b3; }
   </style>
 </head>
 <body>
-  <h2>Deezer Preview Player</h2>
-  <p id="status">Loading songs...</p>
-  <div id="remainingCount"></div>
-  <ul id="songList"></ul>
-  <audio id="audio" controls preload="auto"></audio>
+  <h1>Finish the Lyric Musical Chairs</h1>
+  <audio id="audio" preload="auto"></audio>
+
+  <div id="songInfo">
+    Current: <span id="currentSong">—</span>
+  </div>
+  <div id="pauseTimer">MOVE!</div>
+  <div id="progress-container">
+    <span id="currentTime">0:00</span>
+    <input type="range" id="progress" value="0" min="0" />
+    <span id="duration">0:00</span>
+  </div>
+
+  <div id="controls">
+    <button id="rewindBtn">Rewind 5s</button>
+    <button id="playPauseBtn">Play</button>
+    <button id="nextBtn">Next</button>
+  </div>
+
+  <div id="infoLine">
+    Next: <span id="nextSong">—</span> | Songs remaining: <span id="remainingCount">0</span>
+  </div>
 
   <script>
-    const GITHUB_CSV_URL = 'https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/top_songs_randomized.csv';
-    const audio = document.getElementById("audio");
-    const songListEl = document.getElementById("songList");
-    const status = document.getElementById("status");
-    const remainingCount = document.getElementById("remainingCount");
+    const GITHUB_CSV_URL = 'https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/refs/heads/main/top_songs_randomized.csv';
+    const audio = document.getElementById('audio');
+    const songInfo = document.getElementById('currentSong');
+    const nextSongInfo = document.getElementById('nextSong');
+    const pauseTimerEl = document.getElementById('pauseTimer');
+    const progress = document.getElementById('progress');
+    const currentTimeEl = document.getElementById('currentTime');
+    const durationEl = document.getElementById('duration');
+    const rewindBtn = document.getElementById('rewindBtn');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const remainingCount = document.getElementById('remainingCount');
+
     let songs = [];
+    let currentIndex = -1;
+    let pauseCountdown;
 
+    // Fetch CSV and initialize
     fetch(GITHUB_CSV_URL)
-      .then(response => response.text())
-      .then(csv => {
-        Papa.parse(csv, {
-          header: false,
-          skipEmptyLines: true,
-          complete: function(results) {
-            songs = results.data.map(row => ({
-              title: row[0].trim(),
-              artist: row[1].trim(),
-              preview: '',
-              played: false
-            })).filter(song => song.title && song.artist);
-            renderSongList();
-            updateRemaining();
-            status.textContent = "Loaded successfully. Click a song to play.";
-          }
-        });
-      })
-      .catch(err => {
-        console.error(err);
-        status.textContent = "Failed to load CSV.";
-      });
+      .then(res => res.text())
+      .then(csv => Papa.parse(csv, { header: false, skipEmptyLines: true, complete: ({ data }) => {
+        songs = data.map(r => ({ title: r[0].trim(), artist: r[1].trim(), preview: '', played: false }));
+        updateInfo();
+        if (songs.length) playSong(0);
+      }}))
+      .catch(err => console.error('CSV load error:', err));
 
-    function renderSongList() {
-      songListEl.innerHTML = '';
-      songs.forEach((song, index) => {
-        const li = document.createElement("li");
-        li.textContent = `${song.title} - ${song.artist}`;
-        if (song.played) li.className = "played";
-        li.onclick = () => playSong(index);
-        songListEl.appendChild(li);
-      });
+    // Format time mm:ss
+    function formatTime(sec) {
+      const m = Math.floor(sec/60);
+      const s = String(Math.floor(sec%60)).padStart(2, '0');
+      return `${m}:${s}`;
     }
 
-    function updateRemaining() {
-      const count = songs.filter(s => !s.played).length;
-      remainingCount.textContent = `Songs remaining: ${count}`;
+    // Update progress bar & timer
+    audio.addEventListener('loadedmetadata', () => {
+      progress.max = Math.floor(audio.duration);
+      durationEl.textContent = formatTime(audio.duration);
+    });
+    audio.addEventListener('timeupdate', () => {
+      progress.value = Math.floor(audio.currentTime);
+      currentTimeEl.textContent = formatTime(audio.currentTime);
+    });
+    progress.addEventListener('input', () => {
+      audio.currentTime = progress.value;
+    });
+
+    // Play event
+    audio.addEventListener('play', () => {
+      clearInterval(pauseCountdown);
+      pauseTimerEl.style.color = 'green';
+      pauseTimerEl.textContent = 'MOVE!';
+      playPauseBtn.textContent = 'Pause';
+    });
+
+    // Pause event
+    audio.addEventListener('pause', () => {
+      playPauseBtn.textContent = 'Play';
+      let remaining = 10;
+      pauseTimerEl.style.color = 'red';
+      pauseTimerEl.textContent = remaining;
+      clearInterval(pauseCountdown);
+      pauseCountdown = setInterval(() => {
+        remaining--;
+        if (remaining >= 0) pauseTimerEl.textContent = remaining;
+        else { clearInterval(pauseCountdown); pauseTimerEl.textContent = 'FINISH THE LYRIC'; }
+      }, 1000);
+    });
+
+    // Auto-next on end
+    audio.addEventListener('ended', () => {
+      if (currentIndex < songs.length - 1) playSong(currentIndex + 1);
+    });
+
+    // Controls
+    rewindBtn.addEventListener('click', () => audio.currentTime = Math.max(0, audio.currentTime - 5));
+    playPauseBtn.addEventListener('click', () => {
+      if (audio.paused) audio.play(); else audio.pause();
+    });
+    nextBtn.addEventListener('click', () => {
+      if (currentIndex < songs.length - 1) playSong(currentIndex + 1);
+    });
+
+    // Update current/next song and remaining
+    function updateInfo() {
+      if (currentIndex >= 0 && songs[currentIndex]) {
+        const c = songs[currentIndex];
+        songInfo.textContent = `${c.title} - ${c.artist}`;
+      }
+      const nextIdx = currentIndex + 1;
+      if (nextIdx < songs.length) {
+        const n = songs[nextIdx];
+        nextSongInfo.textContent = `${n.title} - ${n.artist}`;
+      } else {
+        nextSongInfo.textContent = '—';
+      }
+      remainingCount.textContent = songs.filter(s => !s.played).length;
     }
 
-    async function playSong(index) {
-      const song = songs[index];
+    // Play a song
+    async function playSong(idx) {
+      clearInterval(pauseCountdown);
+      currentIndex = idx;
+      const song = songs[idx];
+
       if (!song.preview) {
         const query = encodeURIComponent(`${song.title} ${song.artist}`);
         try {
-          const url = `https://corsproxy.io/?https://api.deezer.com/search?q=${query}`;
-          const res = await fetch(url);
+          const res = await fetch(`https://corsproxy.io/?https://api.deezer.com/search?q=${query}`);
           const data = await res.json();
           song.preview = data.data?.[0]?.preview || '';
         } catch (error) {
-          alert('Error fetching preview.');
+          alert('Error fetching preview');
           return;
         }
       }
+
       if (song.preview) {
         audio.src = song.preview;
-        audio.play();
-        songs[index].played = true;
-        renderSongList();
-        updateRemaining();
+        await audio.play();
+        playPauseBtn.textContent = 'Pause';
+        song.played = true;
+        updateInfo();
       } else {
         alert(`No preview found for: ${song.title} - ${song.artist}`);
       }
