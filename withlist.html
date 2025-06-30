@@ -85,13 +85,6 @@
     let isRewindPlayback = false;
     let hasStarted = false;
 
-    function shuffle(array) {
-      for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-    }
-
     function formatTime(sec) {
       const m = Math.floor(sec / 60);
       const s = String(Math.floor(sec % 60)).padStart(2, '0');
@@ -127,7 +120,6 @@
       .then(csv => Papa.parse(csv, { header: false, skipEmptyLines: true,
         complete: ({ data }) => {
           songs = data.map(r => ({ title: r[0].trim(), artist: r[1].trim(), preview: '', played: false }));
-          shuffle(songs);
           currentIndex = 0;
           updateInfo();
           buildSongList();
@@ -192,7 +184,6 @@
     });
 
     resetBtn.addEventListener('click', () => {
-      shuffle(songs);
       songs.forEach(s => s.played = false);
       currentIndex = 0;
       updateInfo();
