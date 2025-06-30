@@ -72,6 +72,7 @@
     let currentIndex = 0;
     let pauseCountdown = null;
     let isRewindPlayback = false;
+    let hasStarted = false; // track if playback has begun to prevent initial pause countdown
 
     function shuffle(array) {
       for (let i = array.length - 1; i > 0; i--) {
@@ -121,6 +122,7 @@
     progress.addEventListener('input', () => { audio.currentTime = progress.value; });
 
     audio.addEventListener('play', () => {
+      hasStarted = true; // mark that playback has started
       clearInterval(pauseCountdown);
       if (!isRewindPlayback) {
         pauseTimerEl.style.color = 'green';
@@ -130,6 +132,9 @@
     });
 
     audio.addEventListener('pause', () => {
+      if (!hasStarted) return; // ignore pause before first play
+      playPauseBtn.textContent = 'Play';
+      if (isRewindPlayback) return;
       playPauseBtn.textContent = 'Play';
       if (isRewindPlayback) return;
       let rem = 10;
