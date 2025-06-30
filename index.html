@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Deezer Preview Player</title>
+  <title>Deezer API Preview Player</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -30,7 +30,7 @@
   </style>
 </head>
 <body>
-  <h2>Deezer Preview Player</h2>
+  <h2>Deezer Preview Player (via API)</h2>
 
   <input type="file" id="fileInput" accept=".csv">
   <div id="remainingCount"></div>
@@ -67,9 +67,9 @@
       reader.onload = function(evt) {
         const lines = evt.target.result.split('\n');
         songs = lines.map(line => {
-          const [title, artist, url] = line.split(',');
-          return { title: title?.trim(), artist: artist?.trim(), url: url?.trim(), played: false };
-        }).filter(song => song.title && song.artist && song.url);
+          const [title, artist] = line.split(',');
+          return { title: title?.trim(), artist: artist?.trim(), preview: '', played: false };
+        }).filter(song => song.title && song.artist);
         renderSongList();
         updateRemaining();
       };
@@ -110,21 +110,36 @@
       audio.currentTime = Math.max(0, audio.currentTime - 5);
     }
 
-    function next() {
+    async function next() {
       if (currentIndex < songs.length - 1) {
         songs[currentIndex].played = true;
         currentIndex++;
-        playSong(currentIndex);
+        await playSong(currentIndex);
       }
       renderSongList();
       updateRemaining();
     }
 
-    function playSong(index) {
-      audio.src = songs[index].url;
-      audio.currentTime = 0;
-      audio.play();
-      playPauseBtn.textContent = "Pause";
+    async function playSong(index) {
+      const song = songs[index];
+
+      if (!song.preview) {
+        const query = encodeURIComponent(`${song.title} ${song.artist}`);
+        const res = await fetch(`https://api.deezer.com/search?q=${query}&output=jsonp&limit=1`);
+        const text = await res.text();
+        const json = JSON.parse(text.replace(/^.+?\((.*)\)$/, '$1'));
+        song.preview = json.data?.[0]?.preview || '';
+      }
+
+      if (song.preview) {
+        audio.src = song.preview;
+        audio.currentTime = 0;
+        audio.play();
+        playPauseBtn.textContent = "Pause";
+      } else {
+        alert(`Preview not found for: ${song.title} - ${song.artist}`);
+        next();
+      }
     }
 
     audio.addEventListener("ended", () => {
