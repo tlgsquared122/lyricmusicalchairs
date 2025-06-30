@@ -7,6 +7,13 @@
   <style>
     body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
     h1 { text-align: center; }
+    /* Tagline styling */
+    #tagline { 
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 0 auto 20px;
+    }
     #audio { width: 100%; margin-bottom: 10px; }
     #songInfo, #infoLine { text-align: center; margin-bottom: 10px; font-size: 1.2rem; }
     #pauseTimer { text-align: center; font-size: 3rem; font-weight: bold; margin-bottom: 10px; }
@@ -30,6 +37,11 @@
   </style>
 </head>
 <body>
+  <!-- Tagline image from GitHub -->
+  <img id="tagline"
+       src="https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/tagline.png"
+       alt="Finish the Lyric Musical Chairs">
+
   <h1>Finish the Lyric Musical Chairs</h1>
   <audio id="audio" preload="auto"></audio>
 
@@ -72,7 +84,7 @@
     let currentIndex = 0;
     let pauseCountdown = null;
     let isRewindPlayback = false;
-    let hasStarted = false; // track if playback has begun to prevent initial pause countdown
+    let hasStarted = false;
 
     function shuffle(array) {
       for (let i = array.length - 1; i > 0; i--) {
@@ -122,7 +134,7 @@
     progress.addEventListener('input', () => { audio.currentTime = progress.value; });
 
     audio.addEventListener('play', () => {
-      hasStarted = true; // mark that playback has started
+      hasStarted = true;
       clearInterval(pauseCountdown);
       if (!isRewindPlayback) {
         pauseTimerEl.style.color = 'green';
@@ -132,9 +144,7 @@
     });
 
     audio.addEventListener('pause', () => {
-      if (!hasStarted) return; // ignore pause before first play
-      playPauseBtn.textContent = 'Play';
-      if (isRewindPlayback) return;
+      if (!hasStarted) return;
       playPauseBtn.textContent = 'Play';
       if (isRewindPlayback) return;
       let rem = 10;
