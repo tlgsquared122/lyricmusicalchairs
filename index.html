@@ -3,86 +3,49 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Deezer API Preview Player</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 600px;
-      margin: auto;
-      padding: 20px;
-    }
-    #controls button {
-      margin: 5px;
-      padding: 10px 20px;
-    }
-    #progress-container {
-      display: flex;
-      align-items: center;
-      margin-top: 10px;
-    }
-    #progress {
-      flex: 1;
-      margin: 0 10px;
-    }
-    .played {
-      color: gray;
-    }
-  </style>
+  <title>Deezer Preview Player with Auto-Load</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
-  <h2>Deezer Preview Player (via API)</h2>
-
-  <input type="file" id="fileInput" accept=".csv">
+  <h2>Deezer Preview Player (Auto-load top_songs_randomized.csv)</h2>
   <div id="remainingCount"></div>
-
-  <div id="controls">
-    <button onclick="rewind()">Rewind 5s</button>
-    <button onclick="playPause()" id="playPauseBtn">Play</button>
-    <button onclick="next()">Next</button>
-  </div>
-
-  <div id="progress-container">
-    <span id="currentTime">0:00</span>
-    <input type="range" id="progress" value="0" min="0" max="30">
-    <span>0:30</span>
-  </div>
-
   <ul id="songList"></ul>
-
-  <audio id="audio" preload="auto"></audio>
+  <audio id="audio" preload="auto" controls></audio>
 
   <script>
-    let songs = [];
-    let currentIndex = 0;
     const audio = document.getElementById("audio");
-    const progress = document.getElementById("progress");
-    const currentTimeDisplay = document.getElementById("currentTime");
-    const playPauseBtn = document.getElementById("playPauseBtn");
     const songListEl = document.getElementById("songList");
     const remainingCount = document.getElementById("remainingCount");
+    let songs = [];
+    let currentIndex = 0;
 
-    document.getElementById("fileInput").addEventListener("change", function(e) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        const lines = evt.target.result.split('\n');
-        songs = lines.map(line => {
-          const [title, artist] = line.split(',');
-          return { title: title?.trim(), artist: artist?.trim(), preview: '', played: false };
-        }).filter(song => song.title && song.artist);
-        renderSongList();
-        updateRemaining();
-      };
-      reader.readAsText(file);
-    });
+    async function loadCSV() {
+      const response = await fetch("top_songs_randomized.csv");
+      const csvText = await response.text();
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: true,
+        complete: function(results) {
+          songs = results.data.map(row => ({
+            title: row[0].trim(),
+            artist: row[1].trim(),
+            preview: '',
+            played: false
+          })).filter(song => song.title && song.artist);
+          renderSongList();
+          updateRemaining();
+          playSong(currentIndex);
+        }
+      });
+    }
 
     function renderSongList() {
       songListEl.innerHTML = '';
       const sorted = [...songs.filter(s => !s.played), ...songs.filter(s => s.played)];
-      sorted.forEach((song, index) => {
+      sorted.forEach(song => {
         const li = document.createElement("li");
         li.textContent = `${song.title} - ${song.artist}`;
-        li.className = song.played ? "played" : "";
+        if (song.played) li.style.color = 'gray';
         songListEl.appendChild(li);
       });
     }
@@ -92,37 +55,8 @@
       remainingCount.textContent = `Songs remaining: ${count}`;
     }
 
-    function playPause() {
-      if (audio.paused) {
-        if (!audio.src) {
-          playSong(currentIndex);
-        } else {
-          audio.play();
-        }
-        playPauseBtn.textContent = "Pause";
-      } else {
-        audio.pause();
-        playPauseBtn.textContent = "Play";
-      }
-    }
-
-    function rewind() {
-      audio.currentTime = Math.max(0, audio.currentTime - 5);
-    }
-
-    async function next() {
-      if (currentIndex < songs.length - 1) {
-        songs[currentIndex].played = true;
-        currentIndex++;
-        await playSong(currentIndex);
-      }
-      renderSongList();
-      updateRemaining();
-    }
-
     async function playSong(index) {
       const song = songs[index];
-
       if (!song.preview) {
         const query = encodeURIComponent(`${song.title} ${song.artist}`);
         const res = await fetch(`https://api.deezer.com/search?q=${query}&output=jsonp&limit=1`);
@@ -130,38 +64,28 @@
         const json = JSON.parse(text.replace(/^.+?\((.*)\)$/, '$1'));
         song.preview = json.data?.[0]?.preview || '';
       }
-
       if (song.preview) {
         audio.src = song.preview;
-        audio.currentTime = 0;
         audio.play();
-        playPauseBtn.textContent = "Pause";
       } else {
         alert(`Preview not found for: ${song.title} - ${song.artist}`);
         next();
       }
     }
 
-    audio.addEventListener("ended", () => {
+    function next() {
       songs[currentIndex].played = true;
       currentIndex++;
       if (currentIndex < songs.length) {
         playSong(currentIndex);
+        renderSongList();
+        updateRemaining();
       }
-      renderSongList();
-      updateRemaining();
-    });
+    }
 
-    audio.addEventListener("timeupdate", () => {
-      progress.value = audio.currentTime;
-      const mins = Math.floor(audio.currentTime / 60);
-      const secs = Math.floor(audio.currentTime % 60).toString().padStart(2, '0');
-      currentTimeDisplay.textContent = `${mins}:${secs}`;
-    });
+    audio.addEventListener("ended", next);
 
-    progress.addEventListener("input", () => {
-      audio.currentTime = progress.value;
-    });
+    window.onload = loadCSV;
   </script>
 </body>
 </html>
