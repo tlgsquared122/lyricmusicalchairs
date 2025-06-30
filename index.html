@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Deezer Iframe Embed</title>
+  <title>Deezer Preview Player with Proxy</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -10,25 +11,94 @@
       margin: auto;
       padding: 20px;
     }
-    iframe {
-      width: 100%;
-      height: 90px;
-      border: none;
-      margin-bottom: 15px;
+    .played {
+      color: gray;
+    }
+    ul li {
+      cursor: pointer;
+      margin: 4px 0;
     }
   </style>
 </head>
 <body>
-  <h2>Deezer Embedded Tracks</h2>
+  <h2>Deezer Preview Player</h2>
+  <p id="status">Loading songs...</p>
+  <div id="remainingCount"></div>
+  <ul id="songList"></ul>
+  <audio id="audio" controls preload="auto"></audio>
 
-  <iframe scrolling="no" frameborder="0" allowtransparency="true" 
-    src="https://widget.deezer.com/widget/dark/track/3135556"></iframe>
+  <script>
+    const GITHUB_CSV_URL = 'https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/top_songs_randomized.csv';
+    const audio = document.getElementById("audio");
+    const songListEl = document.getElementById("songList");
+    const status = document.getElementById("status");
+    const remainingCount = document.getElementById("remainingCount");
+    let songs = [];
 
-  <iframe scrolling="no" frameborder="0" allowtransparency="true" 
-    src="https://widget.deezer.com/widget/dark/track/1109731"></iframe>
+    fetch(GITHUB_CSV_URL)
+      .then(response => response.text())
+      .then(csv => {
+        Papa.parse(csv, {
+          header: false,
+          skipEmptyLines: true,
+          complete: function(results) {
+            songs = results.data.map(row => ({
+              title: row[0].trim(),
+              artist: row[1].trim(),
+              preview: '',
+              played: false
+            })).filter(song => song.title && song.artist);
+            renderSongList();
+            updateRemaining();
+            status.textContent = "Loaded successfully. Click a song to play.";
+          }
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        status.textContent = "Failed to load CSV.";
+      });
 
-  <iframe scrolling="no" frameborder="0" allowtransparency="true" 
-    src="https://widget.deezer.com/widget/dark/track/1196066"></iframe>
+    function renderSongList() {
+      songListEl.innerHTML = '';
+      songs.forEach((song, index) => {
+        const li = document.createElement("li");
+        li.textContent = `${song.title} - ${song.artist}`;
+        if (song.played) li.className = "played";
+        li.onclick = () => playSong(index);
+        songListEl.appendChild(li);
+      });
+    }
 
+    function updateRemaining() {
+      const count = songs.filter(s => !s.played).length;
+      remainingCount.textContent = `Songs remaining: ${count}`;
+    }
+
+    async function playSong(index) {
+      const song = songs[index];
+      if (!song.preview) {
+        const query = encodeURIComponent(`${song.title} ${song.artist}`);
+        try {
+          const url = `https://corsproxy.io/?https://api.deezer.com/search?q=${query}`;
+          const res = await fetch(url);
+          const data = await res.json();
+          song.preview = data.data?.[0]?.preview || '';
+        } catch (error) {
+          alert('Error fetching preview.');
+          return;
+        }
+      }
+      if (song.preview) {
+        audio.src = song.preview;
+        audio.play();
+        songs[index].played = true;
+        renderSongList();
+        updateRemaining();
+      } else {
+        alert(`No preview found for: ${song.title} - ${song.artist}`);
+      }
+    }
+  </script>
 </body>
 </html>
