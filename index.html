@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Deezer Preview Player</title>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
     #controls button { margin: 10px; padding: 10px 20px; font-size: 16px; }
@@ -41,37 +40,32 @@
   <div id="playlist"></div>
 
   <script>
-    let songs = [], currentIndex = 0;
+    const songs = [
+      {
+        title: "Blinding Lights - The Weeknd",
+        preview: "https://cdns-preview-3.dzcdn.net/stream/c-95a833fede2fe585f5175e1837888e6d-4.mp3",
+        played: false
+      },
+      {
+        title: "Uptown Funk - Mark Ronson",
+        preview: "https://cdns-preview-4.dzcdn.net/stream/c-43bfa3d2160847fcf13246c2354ed2f6-3.mp3",
+        played: false
+      },
+      {
+        title: "Billie Jean - Michael Jackson",
+        preview: "https://cdns-preview-e.dzcdn.net/stream/c-e69c512dd7e2ab8df40b2d6e9273fcba-5.mp3",
+        played: false
+      }
+      // ✅ Add more songs here in the same format
+    ];
+
+    let currentIndex = 0;
     const audio = document.getElementById("audio");
     const songTitle = document.getElementById("song-title");
     const progressBar = document.getElementById("progress-bar");
     const timer = document.getElementById("timer");
     const playlistDiv = document.getElementById("playlist");
     const remainingCountDiv = document.getElementById("remaining-count");
-
-    fetch('top_songs_with_previews.csv')
-      .then(res => res.text())
-      .then(text => {
-        Papa.parse(text, {
-          header: true,
-          skipEmptyLines: true,
-          complete: function (results) {
-            songs = results.data
-              .filter(row => row.preview_url && row.preview_url.startsWith('http'))
-              .map(row => ({
-                title: `${row.title.trim()} - ${row.artist.trim()}`,
-                preview: row.preview_url.trim(),
-                played: false
-              }));
-            if (songs.length > 0) {
-              loadSong(0);
-              renderPlaylist();
-            } else {
-              alert("No valid previews found in CSV.");
-            }
-          }
-        });
-      });
 
     function loadSong(index) {
       currentIndex = index;
@@ -115,4 +109,45 @@
 
     function formatTime(seconds) {
       const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds %
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs < 10 ? "0" + secs : secs}`;
+    }
+
+    audio.addEventListener("timeupdate", () => {
+      progressBar.value = audio.currentTime;
+      timer.textContent = `${formatTime(audio.currentTime)} / 0:30`;
+    });
+
+    audio.addEventListener("ended", () => {
+      nextSong();
+    });
+
+    progressBar.addEventListener("input", () => {
+      audio.currentTime = progressBar.value;
+    });
+
+    function updateRemainingCount() {
+      const remaining = songs.filter(song => !song.played).length;
+      remainingCountDiv.textContent = `Songs remaining: ${remaining}`;
+    }
+
+    function renderPlaylist() {
+      playlistDiv.innerHTML = "<h2>Playlist</h2>";
+      updateRemainingCount();
+      songs.forEach((song, index) => {
+        const div = document.createElement("div");
+        div.className = "playlist-item" + (song.played ? " played" : "");
+        div.textContent = song.title;
+        div.onclick = () => {
+          loadSong(index);
+          audio.play();
+        };
+        playlistDiv.appendChild(div);
+      });
+    }
+
+    loadSong(currentIndex);
+    renderPlaylist();
+  </script>
+</body>
+</html>
