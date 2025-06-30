@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Finish the Lyric Musical Chairs - Search</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+    h1 { text-align: center; }
+    #searchBar { width: calc(100% - 110px); padding: 10px; font-size: 1rem; }
+    #searchButton { padding: 10px 20px; font-size: 1rem; }
+    .song-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #ddd; }
+    .song-title { font-weight: bold; }
+    .play-btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; }
+    .play-btn.playing { background-color: #4CAF50; color: white; }
+    .add-btn { padding: 6px 12px; margin-left: 8px; border: none; border-radius: 4px; cursor: pointer; background-color: #007BFF; color: white; }
+    .add-btn:disabled { background-color: #ccc; cursor: default; }
+    #downloadCsv { margin-top: 20px; padding: 10px 20px; font-size: 1rem; display: block; }
+  </style>
+</head>
+<body>
+  <h1>Search & Play Preview</h1>
+  <div>
+    <input id="searchBar" type="text" placeholder="Search for a song or artist" />
+    <button id="searchButton">Search</button>
+  </div>
+  <div id="results"></div>
+  <button id="downloadCsv" disabled>Download List as CSV</button>
+
+  <script>
+    document.getElementById('searchButton').addEventListener('click', searchSongs);
+    document.getElementById('downloadCsv').addEventListener('click', downloadCsv);
+
+    let currentAudio = null;
+    let currentButton = null;
+    const songsList = [];
+
+    function searchSongs() {
+      const query = document.getElementById('searchBar').value.trim();
+      if (!query) return;
+      const script = document.createElement('script');
+      script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&output=jsonp&callback=displayResults`;
+      document.body.appendChild(script);
+    }
+
+    function displayResults(response) {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '';
+      if (!response.data || response.data.length === 0) {
+        resultsDiv.textContent = 'No results found.';
+        return;
+      }
+      response.data.forEach(track => {
+        const item = document.createElement('div');
+        item.className = 'song-item';
+
+        const info = document.createElement('div');
+        info.innerHTML = `<span class="song-title">${track.title}</span> — ${track.artist.name}`;
+
+        const controls = document.createElement('div');
+
+        const playBtn = document.createElement('button');
+        playBtn.className = 'play-btn';
+        playBtn.textContent = 'Play';
+        playBtn.addEventListener('click', () => togglePlay(track.preview, playBtn));
+
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-btn';
+        addBtn.textContent = 'Add to List';
+        addBtn.addEventListener('click', () => addToList(track, addBtn));
+
+        controls.appendChild(playBtn);
+        controls.appendChild(addBtn);
+        item.appendChild(info);
+        item.appendChild(controls);
+        resultsDiv.appendChild(item);
+      });
+    }
+
+    function togglePlay(previewUrl, button) {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentButton.textContent = 'Play';
+        currentButton.classList.remove('playing');
+      }
+      if (button === currentButton) {
+        currentAudio = null;
+        currentButton = null;
+        return;
+      }
+      const audio = new Audio(previewUrl);
+      audio.play();
+      button.textContent = 'Pause';
+      button.classList.add('playing');
+      currentAudio = audio;
+      currentButton = button;
+      audio.addEventListener('ended', () => {
+        button.textContent = 'Play';
+        button.classList.remove('playing');
+        currentAudio = null;
+        currentButton = null;
+      });
+    }
+
+    function addToList(track, button) {
+      songsList.push({ title: track.title, artist: track.artist.name });
+      button.disabled = true;
+      button.textContent = 'Added';
+      document.getElementById('downloadCsv').disabled = false;
+    }
+
+    function downloadCsv() {
+      const csvContent = Papa.unparse(songsList, { header: true });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'songs_list.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
