@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deezer Preview Player</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
+    #controls button { margin: 10px; padding: 10px 20px; font-size: 16px; }
+    #song-title { margin-top: 20px; font-size: 18px; font-weight: bold; }
+    #progress-container { width: 100%; max-width: 400px; margin: 20px auto; }
+    #progress-bar { width: 100%; }
+    #timer { margin-top: 10px; font-size: 14px; }
+    #remaining-count { font-weight: bold; margin-bottom: 10px; max-width: 400px; margin: auto; text-align: left; }
+    #playlist { margin-top: 10px; text-align: left; max-width: 400px; margin: auto; }
+    .playlist-item { cursor: pointer; padding: 8px; border-bottom: 1px solid #ccc; }
+    .playlist-item:hover { background-color: #f0f0f0; }
+    .played { color: gray; }
+  </style>
+</head>
+<body>
+  <h1>Deezer Preview Player</h1>
+  <audio id="audio" controls hidden></audio>
+
+  <div id="controls">
+    <button onclick="rewindSong()">⏪ Rewind 5s</button>
+    <button onclick="playSong()">▶️ Play</button>
+    <button onclick="pauseSong()">⏸ Pause</button>
+    <button onclick="nextSong()">⏭ Next</button>
+  </div>
+
+  <div id="song-title"></div>
+
+  <div id="progress-container">
+    <input type="range" id="progress-bar" value="0" min="0" max="30" step="0.1" />
+    <div id="timer">0:00 / 0:30</div>
+  </div>
+
+  <div id="remaining-count"></div>
+  <div id="playlist"></div>
+
+  <script>
+    let songs = [], currentIndex = 0;
+    const audio = document.getElementById("audio");
+    const songTitle = document.getElementById("song-title");
+    const progressBar = document.getElementById("progress-bar");
+    const timer = document.getElementById("timer");
+    const playlistDiv = document.getElementById("playlist");
+    const remainingCountDiv = document.getElementById("remaining-count");
+
+    fetch('top_songs_with_previews.csv')
+      .then(res => res.text())
+      .then(text => {
+        Papa.parse(text, {
+          header: true,
+          skipEmptyLines: true,
+          complete: function (results) {
+            songs = results.data
+              .filter(row => row.preview_url && row.preview_url.startsWith('http'))
+              .map(row => ({
+                title: `${row.title.trim()} - ${row.artist.trim()}`,
+                preview: row.preview_url.trim(),
+                played: false
+              }));
+            if (songs.length > 0) {
+              loadSong(0);
+              renderPlaylist();
+            } else {
+              alert("No valid previews found in CSV.");
+            }
+          }
+        });
+      });
+
+    function loadSong(index) {
+      currentIndex = index;
+      audio.src = songs[index].preview;
+      songTitle.textContent = songs[index].title;
+      progressBar.value = 0;
+      timer.textContent = "0:00 / 0:30";
+    }
+
+    function playSong() {
+      loadSong(currentIndex);
+      audio.play();
+    }
+
+    function pauseSong() {
+      audio.pause();
+    }
+
+    function nextSong() {
+      songs[currentIndex].played = true;
+      updateRemainingCount();
+      const nextIndex = songs.findIndex((s, i) => !s.played && i > currentIndex);
+      const firstUnplayed = songs.findIndex(s => !s.played);
+      if (nextIndex !== -1) {
+        loadSong(nextIndex);
+        audio.play();
+      } else if (firstUnplayed !== -1) {
+        loadSong(firstUnplayed);
+        audio.play();
+      } else {
+        songTitle.textContent = "No more songs in the playlist.";
+        audio.pause();
+        audio.src = "";
+      }
+      renderPlaylist();
+    }
+
+    function rewindSong() {
+      audio.currentTime = Math.max(audio.currentTime - 5, 0);
+    }
+
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds %
