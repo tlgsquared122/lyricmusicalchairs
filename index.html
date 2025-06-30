@@ -1,153 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Deezer Preview Player</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
-    #controls button { margin: 10px; padding: 10px 20px; font-size: 16px; }
-    #song-title { margin-top: 20px; font-size: 18px; font-weight: bold; }
-    #progress-container { width: 100%; max-width: 400px; margin: 20px auto; }
-    #progress-bar { width: 100%; }
-    #timer { margin-top: 10px; font-size: 14px; }
-    #remaining-count { font-weight: bold; margin-bottom: 10px; max-width: 400px; margin: auto; text-align: left; }
-    #playlist { margin-top: 10px; text-align: left; max-width: 400px; margin: auto; }
-    .playlist-item { cursor: pointer; padding: 8px; border-bottom: 1px solid #ccc; }
-    .playlist-item:hover { background-color: #f0f0f0; }
-    .played { color: gray; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+    }
+    #controls button {
+      margin: 5px;
+      padding: 10px 20px;
+    }
+    #progress-container {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+    }
+    #progress {
+      flex: 1;
+      margin: 0 10px;
+    }
+    .played {
+      color: gray;
+    }
   </style>
 </head>
 <body>
-  <h1>Deezer Preview Player</h1>
-  <audio id="audio" controls hidden></audio>
+  <h2>Deezer Preview Player</h2>
+
+  <input type="file" id="fileInput" accept=".csv">
+  <div id="remainingCount"></div>
 
   <div id="controls">
-    <button onclick="rewindSong()">⏪ Rewind 5s</button>
-    <button onclick="playSong()">▶️ Play</button>
-    <button onclick="pauseSong()">⏸ Pause</button>
-    <button onclick="nextSong()">⏭ Next</button>
+    <button onclick="rewind()">Rewind 5s</button>
+    <button onclick="playPause()" id="playPauseBtn">Play</button>
+    <button onclick="next()">Next</button>
   </div>
-
-  <div id="song-title"></div>
 
   <div id="progress-container">
-    <input type="range" id="progress-bar" value="0" min="0" max="30" step="0.1" />
-    <div id="timer">0:00 / 0:30</div>
+    <span id="currentTime">0:00</span>
+    <input type="range" id="progress" value="0" min="0" max="30">
+    <span>0:30</span>
   </div>
 
-  <div id="remaining-count"></div>
-  <div id="playlist"></div>
+  <ul id="songList"></ul>
+
+  <audio id="audio" preload="auto"></audio>
 
   <script>
-    const songs = [
-      {
-        title: "Blinding Lights - The Weeknd",
-        preview: "https://cdns-preview-3.dzcdn.net/stream/c-95a833fede2fe585f5175e1837888e6d-4.mp3",
-        played: false
-      },
-      {
-        title: "Uptown Funk - Mark Ronson",
-        preview: "https://cdns-preview-4.dzcdn.net/stream/c-43bfa3d2160847fcf13246c2354ed2f6-3.mp3",
-        played: false
-      },
-      {
-        title: "Billie Jean - Michael Jackson",
-        preview: "https://cdns-preview-e.dzcdn.net/stream/c-e69c512dd7e2ab8df40b2d6e9273fcba-5.mp3",
-        played: false
-      }
-      // ✅ Add more songs here in the same format
-    ];
-
+    let songs = [];
     let currentIndex = 0;
     const audio = document.getElementById("audio");
-    const songTitle = document.getElementById("song-title");
-    const progressBar = document.getElementById("progress-bar");
-    const timer = document.getElementById("timer");
-    const playlistDiv = document.getElementById("playlist");
-    const remainingCountDiv = document.getElementById("remaining-count");
+    const progress = document.getElementById("progress");
+    const currentTimeDisplay = document.getElementById("currentTime");
+    const playPauseBtn = document.getElementById("playPauseBtn");
+    const songListEl = document.getElementById("songList");
+    const remainingCount = document.getElementById("remainingCount");
 
-    function loadSong(index) {
-      currentIndex = index;
-      audio.src = songs[index].preview;
-      songTitle.textContent = songs[index].title;
-      progressBar.value = 0;
-      timer.textContent = "0:00 / 0:30";
-    }
-
-    function playSong() {
-      loadSong(currentIndex);
-      audio.play();
-    }
-
-    function pauseSong() {
-      audio.pause();
-    }
-
-    function nextSong() {
-      songs[currentIndex].played = true;
-      updateRemainingCount();
-      const nextIndex = songs.findIndex((s, i) => !s.played && i > currentIndex);
-      const firstUnplayed = songs.findIndex(s => !s.played);
-      if (nextIndex !== -1) {
-        loadSong(nextIndex);
-        audio.play();
-      } else if (firstUnplayed !== -1) {
-        loadSong(firstUnplayed);
-        audio.play();
-      } else {
-        songTitle.textContent = "No more songs in the playlist.";
-        audio.pause();
-        audio.src = "";
-      }
-      renderPlaylist();
-    }
-
-    function rewindSong() {
-      audio.currentTime = Math.max(audio.currentTime - 5, 0);
-    }
-
-    function formatTime(seconds) {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}:${secs < 10 ? "0" + secs : secs}`;
-    }
-
-    audio.addEventListener("timeupdate", () => {
-      progressBar.value = audio.currentTime;
-      timer.textContent = `${formatTime(audio.currentTime)} / 0:30`;
+    document.getElementById("fileInput").addEventListener("change", function(e) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const lines = evt.target.result.split('\n');
+        songs = lines.map(line => {
+          const [title, artist, url] = line.split(',');
+          return { title: title?.trim(), artist: artist?.trim(), url: url?.trim(), played: false };
+        }).filter(song => song.title && song.artist && song.url);
+        renderSongList();
+        updateRemaining();
+      };
+      reader.readAsText(file);
     });
 
-    audio.addEventListener("ended", () => {
-      nextSong();
-    });
-
-    progressBar.addEventListener("input", () => {
-      audio.currentTime = progressBar.value;
-    });
-
-    function updateRemainingCount() {
-      const remaining = songs.filter(song => !song.played).length;
-      remainingCountDiv.textContent = `Songs remaining: ${remaining}`;
-    }
-
-    function renderPlaylist() {
-      playlistDiv.innerHTML = "<h2>Playlist</h2>";
-      updateRemainingCount();
-      songs.forEach((song, index) => {
-        const div = document.createElement("div");
-        div.className = "playlist-item" + (song.played ? " played" : "");
-        div.textContent = song.title;
-        div.onclick = () => {
-          loadSong(index);
-          audio.play();
-        };
-        playlistDiv.appendChild(div);
+    function renderSongList() {
+      songListEl.innerHTML = '';
+      const sorted = [...songs.filter(s => !s.played), ...songs.filter(s => s.played)];
+      sorted.forEach((song, index) => {
+        const li = document.createElement("li");
+        li.textContent = `${song.title} - ${song.artist}`;
+        li.className = song.played ? "played" : "";
+        songListEl.appendChild(li);
       });
     }
 
-    loadSong(currentIndex);
-    renderPlaylist();
+    function updateRemaining() {
+      const count = songs.filter(s => !s.played).length;
+      remainingCount.textContent = `Songs remaining: ${count}`;
+    }
+
+    function playPause() {
+      if (audio.paused) {
+        if (!audio.src) {
+          playSong(currentIndex);
+        } else {
+          audio.play();
+        }
+        playPauseBtn.textContent = "Pause";
+      } else {
+        audio.pause();
+        playPauseBtn.textContent = "Play";
+      }
+    }
+
+    function rewind() {
+      audio.currentTime = Math.max(0, audio.currentTime - 5);
+    }
+
+    function next() {
+      if (currentIndex < songs.length - 1) {
+        songs[currentIndex].played = true;
+        currentIndex++;
+        playSong(currentIndex);
+      }
+      renderSongList();
+      updateRemaining();
+    }
+
+    function playSong(index) {
+      audio.src = songs[index].url;
+      audio.currentTime = 0;
+      audio.play();
+      playPauseBtn.textContent = "Pause";
+    }
+
+    audio.addEventListener("ended", () => {
+      songs[currentIndex].played = true;
+      currentIndex++;
+      if (currentIndex < songs.length) {
+        playSong(currentIndex);
+      }
+      renderSongList();
+      updateRemaining();
+    });
+
+    audio.addEventListener("timeupdate", () => {
+      progress.value = audio.currentTime;
+      const mins = Math.floor(audio.currentTime / 60);
+      const secs = Math.floor(audio.currentTime % 60).toString().padStart(2, '0');
+      currentTimeDisplay.textContent = `${mins}:${secs}`;
+    });
+
+    progress.addEventListener("input", () => {
+      audio.currentTime = progress.value;
+    });
   </script>
 </body>
 </html>
