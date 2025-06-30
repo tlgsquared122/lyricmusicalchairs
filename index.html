@@ -2,9 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Finish the Lyric Musical Chairs</title>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
+    html, body { height: 100%; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
     h1 { text-align: center; }
     #audio { width: 100%; margin-bottom: 10px; }
@@ -21,8 +26,8 @@
   </style>
 </head>
 <body>
-  <!-- Tagline image from GitHub -->
-  <img src="https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/tagline.png" alt="Tagline" style="display: block; margin: auto; max-width: 100%; height: auto;" />
+  <!-- Tagline image -->
+  <img src="https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/tagline.png" alt="Tagline" style="display:block;margin:auto;max-width:100%;height:auto;" />
   <h1>Finish the Lyric Musical Chairs</h1>
   <audio id="audio" preload="auto"></audio>
 
@@ -30,7 +35,7 @@
   <div id="pauseTimer">MOVE!</div>
   <div id="progress-container">
     <span id="currentTime">0:00</span>
-    <input type="range" id="progress" value="0" min="0" />
+    <input type="range" id="progress" value="0" min="0">
     <span id="duration">0:00</span>
   </div>
 
@@ -47,6 +52,15 @@
   </div>
 
   <script>
+    // Attempt to enter fullscreen when in standalone mode (iPad home-screen PWA)
+    window.addEventListener('load', () => {
+      if (window.navigator.standalone && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if (window.navigator.standalone && document.documentElement.webkitRequestFullscreen) {
+        document.documentElement.webkitRequestFullscreen();
+      }
+    });
+
     const CSV_URL = 'https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/refs/heads/main/top_songs_randomized.csv';
     const audio = document.getElementById('audio');
     const currentSongEl = document.getElementById('currentSong');
@@ -74,14 +88,14 @@
       }
     }
 
-    // Format time
+    // Format M:SS
     function formatTime(sec) {
       const m = Math.floor(sec / 60);
       const s = String(Math.floor(sec % 60)).padStart(2, '0');
       return `${m}:${s}`;
     }
 
-    // Load and start
+    // Load songs and start
     fetch(CSV_URL)
       .then(r => r.text())
       .then(csv => Papa.parse(csv, { header:false, skipEmptyLines:true,
@@ -92,10 +106,9 @@
           updateInfo();
           playIndex(currentIndex);
         }
-      }))
-      .catch(console.error);
+      })).catch(console.error);
 
-    // Update display
+    // Update displays
     function updateInfo() {
       const curr = songs[currentIndex];
       currentSongEl.textContent = `${curr.title} - ${curr.artist}`;
@@ -108,7 +121,7 @@
       remainingCountEl.textContent = songs.length - currentIndex - 1;
     }
 
-    // Audio events
+    // Audio event handlers
     audio.addEventListener('loadedmetadata', () => {
       progress.max = Math.floor(audio.duration);
       durationEl.textContent = formatTime(audio.duration);
@@ -146,7 +159,7 @@
       if (currentIndex < songs.length - 1) playIndex(++currentIndex);
     });
 
-    // Rewind
+    // Rewind logic
     rewindBtn.addEventListener('click', () => {
       clearInterval(pauseCountdown);
       isRewindPlayback = true;
@@ -159,42 +172,41 @@
       setTimeout(() => { audio.pause(); isRewindPlayback = false; }, sec * 1000);
     });
 
-    // Play/Pause
+    // Play/Pause control
     playPauseBtn.addEventListener('click', () => {
       if (audio.paused) { isRewindPlayback = false; audio.play(); }
       else audio.pause();
     });
 
-    // Next
+    // Next control
     nextBtn.addEventListener('click', () => {
       if (currentIndex < songs.length - 1) playIndex(++currentIndex);
     });
 
-    // Reset
+    // Reset control
     resetBtn.addEventListener('click', () => {
-      songs.forEach(s => s.played = false);
       shuffle(songs);
       currentIndex = 0;
       updateInfo();
       playIndex(currentIndex);
     });
 
-    // Play index
+    // Play specific index
     async function playIndex(idx) {
       updateInfo();
       const s = songs[idx];
       if (!s.preview) {
         try {
-          const q = encodeURIComponent(`${s.title} ${s.artist}`);
-          const r = await fetch(`https://corsproxy.io/?https://api.deezer.com/search?q=${q}`);
-          const j = await r.json();
-          s.preview = j.data?.[0]?.preview || '';
+          const q=encodeURIComponent(`${s.title} ${s.artist}`);
+          const r=await fetch(`https://corsproxy.io/?https://api.deezer.com/search?q=${q}`);
+          const j=await r.json();
+          s.preview=j.data?.[0]?.preview||'';
         } catch { alert('Error fetching preview'); return; }
       }
       if (!s.preview) { alert(`No preview for: ${s.title}`); return; }
-      audio.src = s.preview;
+      audio.src=s.preview;
       await audio.play();
-      s.played = true;
+      s.played=true;
     }
   </script>
 </body>
