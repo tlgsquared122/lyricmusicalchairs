@@ -2,90 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Deezer Preview Player with Auto-Load</title>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <title>Deezer Iframe Embed</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: auto;
+      padding: 20px;
+    }
+    iframe {
+      width: 100%;
+      height: 90px;
+      border: none;
+      margin-bottom: 15px;
+    }
+  </style>
 </head>
 <body>
-  <h2>Deezer Preview Player (Auto-load top_songs_randomized.csv)</h2>
-  <div id="remainingCount"></div>
-  <ul id="songList"></ul>
-  <audio id="audio" preload="auto" controls></audio>
+  <h2>Deezer Embedded Tracks</h2>
 
-  <script>
-    const audio = document.getElementById("audio");
-    const songListEl = document.getElementById("songList");
-    const remainingCount = document.getElementById("remainingCount");
-    let songs = [];
-    let currentIndex = 0;
+  <iframe scrolling="no" frameborder="0" allowtransparency="true" 
+    src="https://widget.deezer.com/widget/dark/track/3135556"></iframe>
 
-    async function loadCSV() {
-      const response = await fetch("top_songs_randomized.csv");
-      const csvText = await response.text();
-      Papa.parse(csvText, {
-        header: false,
-        skipEmptyLines: true,
-        complete: function(results) {
-          songs = results.data.map(row => ({
-            title: row[0].trim(),
-            artist: row[1].trim(),
-            preview: '',
-            played: false
-          })).filter(song => song.title && song.artist);
-          renderSongList();
-          updateRemaining();
-          playSong(currentIndex);
-        }
-      });
-    }
+  <iframe scrolling="no" frameborder="0" allowtransparency="true" 
+    src="https://widget.deezer.com/widget/dark/track/1109731"></iframe>
 
-    function renderSongList() {
-      songListEl.innerHTML = '';
-      const sorted = [...songs.filter(s => !s.played), ...songs.filter(s => s.played)];
-      sorted.forEach(song => {
-        const li = document.createElement("li");
-        li.textContent = `${song.title} - ${song.artist}`;
-        if (song.played) li.style.color = 'gray';
-        songListEl.appendChild(li);
-      });
-    }
+  <iframe scrolling="no" frameborder="0" allowtransparency="true" 
+    src="https://widget.deezer.com/widget/dark/track/1196066"></iframe>
 
-    function updateRemaining() {
-      const count = songs.filter(s => !s.played).length;
-      remainingCount.textContent = `Songs remaining: ${count}`;
-    }
-
-    async function playSong(index) {
-      const song = songs[index];
-      if (!song.preview) {
-        const query = encodeURIComponent(`${song.title} ${song.artist}`);
-        const res = await fetch(`https://api.deezer.com/search?q=${query}&output=jsonp&limit=1`);
-        const text = await res.text();
-        const json = JSON.parse(text.replace(/^.+?\((.*)\)$/, '$1'));
-        song.preview = json.data?.[0]?.preview || '';
-      }
-      if (song.preview) {
-        audio.src = song.preview;
-        audio.play();
-      } else {
-        alert(`Preview not found for: ${song.title} - ${song.artist}`);
-        next();
-      }
-    }
-
-    function next() {
-      songs[currentIndex].played = true;
-      currentIndex++;
-      if (currentIndex < songs.length) {
-        playSong(currentIndex);
-        renderSongList();
-        updateRemaining();
-      }
-    }
-
-    audio.addEventListener("ended", next);
-
-    window.onload = loadCSV;
-  </script>
 </body>
 </html>
