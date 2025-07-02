@@ -1,70 +1,172 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Finish the Lyric Musical Chairs</title>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <title>Song List Editor</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
-    h1, h2 { text-align: center; }
-    #tagline { display: block; max-width: 100%; height: auto; margin: 0 auto 20px; }
-    #audio { width: 100%; margin-bottom: 10px; }
-    #songInfo, #infoLine { text-align: center; margin-bottom: 10px; font-size: 1.2rem; }
-    #pauseTimer { text-align: center; font-size: 3rem; font-weight: bold; margin-bottom: 10px; }
-    #progress-container { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
-    #progress { flex: 1; }
-    .controls { display: flex; justify-content: center; gap: 200px; margin-bottom: 10px; }
-    .controls button {
-      padding: 20px 32px;
-      font-size: 1.5rem;
-      border-radius: 8px;
-      background-color: #007BFF;
-      color: #fff;
-      border: none;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      touch-action: manipulation;
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
     }
-    .controls button:active { background-color: #0056b3; }
-    #secondaryControls { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 10px; }
-    #resetBtn { padding: 10px 16px; font-size: 1rem; border-radius: 8px; background-color: #007BFF; color: #fff; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    #resetBtn:active { background-color: #0056b3; }
-    #songList { max-height: 300px; overflow-y: auto; padding-left: 0; list-style: none; border-top: 1px solid #ccc; margin-top: 30px; }
-    #songList li { padding: 8px; cursor: pointer; border-bottom: 1px solid #ccc; }
-    #songList li:hover { background-color: #f0f0f0; }
-    #songList li.played { color: gray; }
-    #songList li.current { background-color: #d0eaff; font-weight: bold; }
+    #player-section {
+      margin-bottom: 20px;
+    }
+    #song-list {
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    .song {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid #ccc;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .song.playing {
+      background-color: #e0f7fa;
+    }
+    .song.played {
+      color: #999;
+    }
+    .info {
+      flex: 1;
+      margin-left: 10px;
+    }
+    .trash {
+      cursor: pointer;
+      color: red;
+      font-size: 20px;
+      margin-left: 10px;
+    }
+    #now-playing {
+      font-size: 1.1em;
+      margin-bottom: 8px;
+    }
+    #player {
+      width: 100%;
+    }
+    #reset-btn {
+      margin-bottom: 15px;
+      background-color: #eee;
+      padding: 8px 12px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
-  <img id="tagline" src="https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/tagline.png" alt="Finish the Lyric Musical Chairs">
-  <h1>Finish the Lyric Musical Chairs</h1>
-  <audio id="audio" preload="auto"></audio>
+  <h1>Deezer Song List</h1>
 
-  <div id="songInfo">Current: <span id="currentSong">—</span></div>
-  <div id="pauseTimer">READY</div>
-  <div id="progress-container">
-    <span id="currentTime">0:00</span>
-    <input type="range" id="progress" value="0" min="0">
-    <span id="duration">0:00</span>
+  <div id="player-section">
+    <div id="now-playing">Now Playing: None</div>
+    <audio id="player" controls></audio>
   </div>
 
-  <div class="controls" id="primaryControls">
-    <button id="rewindBtn">Rewind 5s</button>
-    <button id="playPauseBtn">Play</button>
-  </div>
-
-  <div id="infoLine">Next: <span id="nextSong">—</span> | Songs remaining: <span id="remainingCount">0</span></div>
-
-  <div class="controls" id="secondaryControls">
-    <button id="nextBtn">Next</button>
-    <button id="resetBtn">Reset Songs</button>
-  </div>
-
-  <h2>Song List</h2>
-  <ul id="songList"></ul>
+  <button id="reset-btn" onclick="resetHistory()">Reset Playback History</button>
+  <div id="song-list">Loading...</div>
 
   <script>
-    // ✅ Replace this with your actual published Google Sheets CSV URL
-    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/15-ZVyqXsbhMxTZ0yRfzoWlnC_uzhv03R9wy1GAQbptE/pub?output=csv';
+    const SHEET_API = 'https://script.google.com/macros/s/AKfycbzUZ9REtmEEdi_w5wWuoKDrbFU9sudsAhsWlRBESJxvy3WR9yYF8rWYVe73MKjhHYDLSQ/exec';
+    const player = document.getElementById('player');
+    const nowPlaying = document.getElementById('now-playing');
+    const songList = document.getElementById('song-list');
+    let currentPlayingElement = null;
+    const playedKey = 'playedSongs';
+    let playedSongs = new Set(JSON.parse(localStorage.getItem(playedKey)) || []);
 
-    const audio = document.getElem
+    async function fetchSongs() {
+      const res = await fetch(SHEET_API);
+      const songs = await res.json();
+      songList.innerHTML = '';
+
+      for (const song of songs) {
+        const deezerData = await searchDeezer(song.Title, song.Artist);
+        if (!deezerData) continue;
+
+        const div = document.createElement('div');
+        const songId = `${song.Title}|${song.Artist}`;
+        div.className = 'song';
+        div.dataset.title = song.Title;
+        div.dataset.artist = song.Artist;
+        div.dataset.preview = deezerData.preview;
+
+        if (playedSongs.has(songId)) {
+          div.classList.add('played');
+        }
+
+        div.onclick = () => {
+          if (currentPlayingElement) {
+            currentPlayingElement.classList.remove('playing');
+            currentPlayingElement.classList.add('played');
+          }
+          div.classList.add('playing');
+          currentPlayingElement = div;
+          player.src = deezerData.preview;
+          player.play();
+          nowPlaying.textContent = `Now Playing: ${song.Title} by ${song.Artist}`;
+
+          playedSongs.add(songId);
+          localStorage.setItem(playedKey, JSON.stringify([...playedSongs]));
+        };
+
+        div.innerHTML = `
+          <div class="info">
+            <strong>${song.Title}</strong> by ${song.Artist}
+          </div>
+          <div class="trash" onclick="event.stopPropagation(); deleteSong(${song.index}, this)">🗑️</div>
+        `;
+
+        songList.appendChild(div);
+      }
+    }
+
+    async function searchDeezer(title, artist) {
+      const query = encodeURIComponent(`${title} ${artist}`);
+      const url = `https://api.deezer.com/search?q=${query}&output=jsonp`;
+
+      return new Promise((resolve) => {
+        const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+        window[callbackName] = function(data) {
+          delete window[callbackName];
+          document.body.removeChild(script);
+          resolve(data.data?.[0] || null);
+        };
+
+        const script = document.createElement('script');
+        script.src = `${url}&callback=${callbackName}`;
+        document.body.appendChild(script);
+      });
+    }
+
+    async function deleteSong(index, el) {
+      const res = await fetch(SHEET_API, {
+        method: 'POST',
+        body: new URLSearchParams({ index })
+      });
+      if (res.ok) {
+        const songElement = el.closest('.song');
+        if (currentPlayingElement === songElement) {
+          player.pause();
+          player.src = '';
+          nowPlaying.textContent = 'Now Playing: None';
+        }
+        songElement.remove();
+      }
+    }
+
+    function resetHistory() {
+      localStorage.removeItem(playedKey);
+      playedSongs.clear();
+      document.querySelectorAll('.song.played').forEach(el => el.classList.remove('played'));
+    }
+
+    fetchSongs();
+  </script>
+</body>
+</html>
