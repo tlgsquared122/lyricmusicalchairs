@@ -27,11 +27,14 @@
 
   <script>
     // GitHub configuration
-    const GITHUB_OWNER = 'tlgsquared122';
-    const GITHUB_REPO  = 'lyricmusicalchairs';
-    const FILE_PATH    = 'songs_list.csv';
-    const BRANCH       = 'main';
-    const GITHUB_TOKEN = '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'; // ⚠️ Visible to anyone
+    const GITHUB_OWNER  = 'tlgsquared122';
+    const GITHUB_REPO   = 'lyricmusicalchairs'; // Actual repo name (ensure this matches exactly)
+    const REPO_ENCODED  = encodeURIComponent(GITHUB_REPO);
+    const FILE_PATH     = 'songs_list.csv';
+    const BRANCH        = 'main';
+    const GITHUB_TOKEN  = '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';
+
+    const BASE_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${REPO_ENCODED}/contents/${FILE_PATH}`;
 
     const searchBtn = document.getElementById('searchBtn');
     const searchBar = document.getElementById('searchBar');
@@ -78,29 +81,54 @@
       button.disabled = true;
       button.textContent = 'Updating...';
       try {
-        const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${encodeURIComponent(GITHUB_REPO)}/contents/${FILE_PATH}?ref=${BRANCH}`;
-        // Fetch content and metadata
-        const [rawRes, metaRes] = await Promise.all([
-          fetch(apiUrl, { headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3.raw' } }),
-          fetch(apiUrl, { headers: { Authorization: `token ${GITHUB_TOKEN}` } })
-        ]);
-        if (!rawRes.ok || !metaRes.ok) throw new Error('Failed to fetch existing CSV');
+        const url = `${BASE_API_URL}?ref=${BRANCH}`;
+        // Fetch raw CSV content
+        const rawRes = await fetch(url, {
+          headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            Accept: 'application/vnd.github.v3.raw'
+          }
+        });
+        if (!rawRes.ok) {
+          console.error('Raw fetch failed', rawRes.status, rawRes.statusText);
+          throw new Error('Failed to fetch CSV content');
+        }
         const csvText = await rawRes.text();
+
+        // Fetch metadata for SHA
+        const metaRes = await fetch(url, {
+          headers: { Authorization: `token ${GITHUB_TOKEN}` }
+        });
+        if (!metaRes.ok) {
+          console.error('Meta fetch failed', metaRes.status, metaRes.statusText);
+          throw new Error('Failed to fetch file metadata');
+        }
         const meta = await metaRes.json();
 
         // Append new row
         const { title, artist } = track;
-        const newLine = `\n"${title.replace(/"/g, '""')}","${artist.name.replace(/"/g, '""')}"`;
+        const newLine = `\n"${title.replace(/"/g, '\\"')}","${artist.name.replace(/"/g, '\\"')}"`;
         const updatedCsv = csvText.trim() + newLine;
 
         // Commit update
         const contentBase64 = btoa(unescape(encodeURIComponent(updatedCsv)));
-        const commitRes = await fetch(apiUrl, {
+        const commitRes = await fetch(url, {
           method: 'PUT',
-          headers: { Authorization: `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: `Add ${title} by ${track.artist.name}`, content: contentBase64, sha: meta.sha, branch: BRANCH })
+          headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: `Add ${title} by ${artist.name}`,
+            content: contentBase64,
+            sha: meta.sha,
+            branch: BRANCH
+          })
         });
-        if (!commitRes.ok) throw new Error('Commit failed');
+        if (!commitRes.ok) {
+          console.error('Commit failed', commitRes.status, commitRes.statusText);
+          throw new Error('Commit failed');
+        }
 
         button.textContent = 'Added ✓';
       } catch (err) {
@@ -112,5 +140,18 @@
     }
   </script>
 
+  <!-- Troubleshooting Tips -->
+
+  <section style="margin-top:20px;">
+    <h2>Troubleshooting</h2>
+    <ul>
+      <li><strong>CORS issues:</strong> GitHub API may block requests from GitHub Pages due to CORS. Ensure your host allows cross-origin requests or use a CORS proxy.</li>
+      <li><strong>Incorrect repo/path:</strong> Verify `GITHUB_OWNER`, `GITHUB_REPO`, `FILE_PATH`, and `BRANCH` exactly match your GitHub settings (case-sensitive).</li>
+      <li><strong>Invalid token:</strong> Confirm your PAT has <code>repo</code> or <code>public_repo</code> scope and that it has not expired.</li>
+      <li><strong>Rate limiting:</strong> GitHub’s unauthenticated rate limit is low. Even with a token, excessive requests may be blocked.</li>
+      <li><strong>Network errors:</strong> Check your browser console for network errors (DNS, HTTPS) and ensure you have internet connectivity.</li>
+    </ul>
+  </section>
+</body>
 </body>
 </html>
