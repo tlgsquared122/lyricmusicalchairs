@@ -25,29 +25,118 @@
   </div>
   <div id="results"></div>
 
-  function addToSheetJsonp(track, button) {
-  const callbackName = 'cb_' + Date.now();
-  window[callbackName] = function(response) {
-    if (response.status === 'success') {
-      button.disabled = true;
-      button.textContent = 'Added';
-      button.classList.add('added');
-    } else {
-      alert('Failed to add song: ' + (response.message || 'Unknown error'));
-    }
-    delete window[callbackName];
-    document.body.removeChild(script);
-  };
-  const params = new URLSearchParams({
-    title: track.title,
-    artist: track.artist.name,
-    trackId: track.id, // ✅ Send Deezer Track ID
-    callback: callbackName
-  });
-  const script = document.createElement('script');
-  script.src = `${WEBAPP_URL}?${params.toString()}`;
-  document.body.appendChild(script);
-}
+  <script>
+    const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzghaSkxoVM55BOtQzQpOz4mbO5sMioKxmrsSXgvZSuLzX7IQh5_0w0Xt3escMY4UBfRA/exec';
 
+    document.getElementById('searchButton').addEventListener('click', searchSongs);
+    document.getElementById('searchBar').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        searchSongs();
+      }
+    });
+
+    let currentAudio = null;
+    let currentButton = null;
+
+    function searchSongs() {
+      const query = document.getElementById('searchBar').value.trim();
+      if (!query) return;
+      const script = document.createElement('script');
+      script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&output=jsonp&callback=displayResults`;
+      document.body.appendChild(script);
+    }
+
+    function displayResults(response) {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '';
+      if (!response.data || response.data.length === 0) {
+        resultsDiv.textContent = 'No results found.';
+        return;
+      }
+
+      const tracks = response.data.slice(0, 15);
+
+      tracks.forEach(track => {
+        const item = document.createElement('div');
+        item.className = 'song-item';
+
+        const info = document.createElement('div');
+        info.innerHTML = `<span class="song-title">${track.title}</span> — ${track.artist.name}`;
+
+        const controls = document.createElement('div');
+
+        const playBtn = document.createElement('button');
+        playBtn.className = 'play-btn';
+        playBtn.textContent = 'Play';
+        playBtn.addEventListener('click', () => togglePlay(track.preview, playBtn));
+
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-btn';
+        addBtn.textContent = 'Add to Sheet';
+        addBtn.addEventListener('click', () => addToSheetJsonp(track, addBtn));
+
+        controls.appendChild(playBtn);
+        controls.appendChild(addBtn);
+        item.appendChild(info);
+        item.appendChild(controls);
+        resultsDiv.appendChild(item);
+      });
+    }
+
+    function togglePlay(previewUrl, button) {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentButton.textContent = 'Play';
+        currentButton.classList.remove('playing');
+      }
+      if (button === currentButton) {
+        currentAudio = null;
+        currentButton = null;
+        return;
+      }
+      const audio = new Audio(previewUrl);
+      audio.play();
+      button.textContent = 'Pause';
+      button.classList.add('playing');
+      currentAudio = audio;
+      currentButton = button;
+      audio.addEventListener('ended', () => {
+        button.textContent = 'Play';
+        button.classList.remove('playing');
+        currentAudio = null;
+        currentButton = null;
+      });
+    }
+
+    function addToSheetJsonp(track, button) {
+      const callbackName = 'cb_' + Date.now();
+      window[callbackName] = function(response) {
+        if (response.status === 'success') {
+          button.disabled = true;
+          button.textContent = 'Added';
+          button.classList.add('added');
+        } else if (response.status === 'duplicate') {
+          button.disabled = true;
+          button.textContent = 'Duplicate';
+          button.classList.add('added');
+        } else {
+          alert('Failed to add song: ' + (response.message || 'Unknown error'));
+        }
+        delete window[callbackName];
+        document.body.removeChild(script);
+      };
+
+      const params = new URLSearchParams({
+        title: track.title,
+        artist: track.artist.name,
+        trackId: track.id,
+        callback: callbackName
+      });
+
+      const script = document.createElement('script');
+      script.src = `${WEBAPP_URL}?${params.toString()}`;
+      document.body.appendChild(script);
+    }
+  </script>
 </body>
 </html>
