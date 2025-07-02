@@ -2,212 +2,289 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Finish the Lyric Musical Chairs</title>
+  <title>Finish the Lyric Musical Chairs - Dual Track Player</title>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+    #tagline-container img { max-width: 100%; height: auto; display: block; margin: 0 auto 20px; }
     h1 { text-align: center; }
-    /* Tagline styling */
-    #tagline { 
-      display: block;
-      max-width: 100%;
-      height: auto;
-      margin: 0 auto 20px;
-    }
-    #audio { width: 100%; margin-bottom: 10px; }
-    #songInfo, #infoLine { text-align: center; margin-bottom: 10px; font-size: 1.2rem; }
-    #pauseTimer { text-align: center; font-size: 3rem; font-weight: bold; margin-bottom: 10px; }
-    #progress-container { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
-    #progress { flex: 1; }
-    .controls { display: flex; justify-content: center; gap: 200px; margin-bottom: 10px; }
-    .controls button {
-      padding: 20px 32px;
-      font-size: 1.5rem;
+    .tracks { display: flex; gap: 20px; justify-content: space-between; }
+    .track-container { flex: 1; }
+    .track-info { text-align: center; margin-bottom: 5px; }
+    .track-label { font-size: 1.2rem; font-weight: bold; }
+    .track-meta { font-size: 1rem; color: #555; }
+    progress { width: 100%; height: 10px; background: #ddd; border: none; border-radius: 5px; }
+    progress::-webkit-progress-bar { background-color: #ddd; border-radius: 5px; }
+    progress::-webkit-progress-value { background-color: #007bff; border-radius: 5px; }
+    .time-display { text-align: center; font-size: 0.9rem; margin-top: 3px; }
+    .controls, .remaining-container { text-align: center; margin-top: 20px; }
+    .controls button, .remaining-container button {
+      padding: 15px 30px;
+      font-size: 1.2rem;
+      margin: 0 10px;
       border-radius: 8px;
-      background-color: #007BFF;
-      color: #fff;
       border: none;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      touch-action: manipulation;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+      transition: background 0.2s ease;
     }
-    .controls button:active { background-color: #0056b3; }
-    #secondaryControls { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 10px; }
-    #resetBtn { padding: 10px 16px; font-size: 1rem; border-radius: 8px; background-color: #007BFF; color: #fff; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    #resetBtn:active { background-color: #0056b3; }
+    .controls button:hover, .remaining-container button:hover { background: #0056b3; }
+    /* Smaller reset button */
+    #resetBtn {
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      margin: 0 5px;
+    }
+    #remainingCount { font-size: 1rem; margin-bottom: 10px; }
   </style>
 </head>
 <body>
-  <!-- Tagline image from GitHub -->
-  <img id="tagline"
-       src="https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/tagline.png"
-       alt="Finish the Lyric Musical Chairs">
-
+  <div id="tagline-container">
+    <img src="https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/tagline.png" alt="Your Tagline" onerror="this.style.display='none';">
+  </div>
   <h1>Finish the Lyric Musical Chairs</h1>
-  <audio id="audio" preload="auto"></audio>
-
-  <div id="songInfo">Current: <span id="currentSong">—</span></div>
-  <div id="pauseTimer">READY</div>
-  <div id="progress-container">
-    <span id="currentTime">0:00</span>
-    <input type="range" id="progress" value="0" min="0"> 
-    <span id="duration">0:00</span>
+  <div class="tracks">
+    <div class="track-container" id="trackA-container">
+      <div class="track-info">
+        <div class="track-label" id="trackA-label">Track A</div>
+        <div class="track-meta" id="trackA-info">Loading...</div>
+      </div>
+      <progress id="progressA" value="0" max="1"></progress>
+      <div class="time-display" id="timeA">0:00 / 0:00</div>
+      <audio id="audioA" preload="auto"></audio>
+    </div>
+    <div class="track-container" id="trackB-container">
+      <div class="track-info">
+        <div class="track-label" id="trackB-label">Track B</div>
+        <div class="track-meta" id="trackB-info">Loading...</div>
+      </div>
+      <progress id="progressB" value="0" max="1"></progress>
+      <div class="time-display" id="timeB">0:00 / 0:00</div>
+      <audio id="audioB" preload="auto"></audio>
+    </div>
   </div>
-
-  <div class="controls" id="primaryControls">
+  <div class="controls">
     <button id="rewindBtn">Rewind 5s</button>
-    <button id="playPauseBtn">Play</button>
-  </div>
-
-  <div id="infoLine">Next: <span id="nextSong">—</span> | Songs remaining: <span id="remainingCount">0</span></div>
-
-  <div class="controls" id="secondaryControls">
+    <button id="playBtn">Play</button>
+    <button id="pauseBtn">Pause</button>
     <button id="nextBtn">Next</button>
+  </div>
+  <div class="remaining-container">
+    <div id="remainingCount">Remaining songs: 0</div>
     <button id="resetBtn">Reset Songs</button>
   </div>
-
   <script>
-    const CSV_URL = 'https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/refs/heads/main/top_songs_randomized.csv';
-    const audio = document.getElementById('audio');
-    const currentSongEl = document.getElementById('currentSong');
-    const nextSongEl = document.getElementById('nextSong');
-    const pauseTimerEl = document.getElementById('pauseTimer');
-    const progress = document.getElementById('progress');
-    const currentTimeEl = document.getElementById('currentTime');
-    const durationEl = document.getElementById('duration');
-    const rewindBtn = document.getElementById('rewindBtn');
-    const playPauseBtn = document.getElementById('playPauseBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const resetBtn = document.getElementById('resetBtn');
-    const remainingCountEl = document.getElementById('remainingCount');
-
-    let songs = [];
-    let currentIndex = 0;
-    let pauseCountdown = null;
-    let isRewindPlayback = false;
-    let hasStarted = false;
-
-    function shuffle(array) {
-      for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-    }
+    const csvUrl = 'https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/top_songs_randomized.csv';
+    let songs = [], usedIndexes = new Set();
+    let lastIndex = null; // track last chosen index for distance filter
+    let audioA, audioB, metaA, metaB, progressA, progressB, timeA, timeB;
+    let rewindBtn, playBtn, pauseBtn, nextBtn, resetBtn, remainingEl;
+    let lastPlayed = null, rewindTimeout;
+    const FADE_DURATION = 2;
 
     function formatTime(sec) {
       const m = Math.floor(sec / 60);
-      const s = String(Math.floor(sec % 60)).padStart(2, '0');
+      const s = Math.floor(sec % 60).toString().padStart(2, '0');
       return `${m}:${s}`;
     }
 
-    fetch(CSV_URL)
-      .then(r => r.text())
-      .then(csv => Papa.parse(csv, { header:false, skipEmptyLines:true,
-        complete: ({data}) => {
-          songs = data.map(r => ({ title: r[0].trim(), artist: r[1].trim(), preview: '', played: false }));
-          shuffle(songs);
-          currentIndex = 0;
-          updateInfo();
-          playIndex(currentIndex);
-        }
-      })).catch(console.error);
-
-    function updateInfo() {
-      const curr = songs[currentIndex];
-      currentSongEl.textContent = `${curr.title} - ${curr.artist}`;
-      if (currentIndex < songs.length - 1) {
-        const nxt = songs[currentIndex + 1];
-        nextSongEl.textContent = `${nxt.title} - ${nxt.artist}`;
-      } else {
-        nextSongEl.textContent = '—';
+    function updateTimeDisplay(audio, progress, timeEl) {
+      if (audio.duration) {
+        progress.max = audio.duration;
+        progress.value = audio.currentTime;
+        timeEl.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+        if (audio.duration - audio.currentTime <= FADE_DURATION && !audio._fadingOut) fadeOut(audio);
       }
-      remainingCountEl.textContent = songs.length - currentIndex - 1;
     }
 
-    audio.addEventListener('loadedmetadata', () => {
-      progress.max = Math.floor(audio.duration);
-      durationEl.textContent = formatTime(audio.duration);
-    });
-    audio.addEventListener('timeupdate', () => {
-      progress.value = Math.floor(audio.currentTime);
-      currentTimeEl.textContent = formatTime(audio.currentTime);
-    });
-    progress.addEventListener('input', () => { audio.currentTime = progress.value; });
+    function updateRemaining() {
+      remainingEl.textContent = `Remaining songs: ${songs.length - usedIndexes.size}`;
+    }
 
-    audio.addEventListener('play', () => {
-      hasStarted = true;
-      clearInterval(pauseCountdown);
-      if (!isRewindPlayback) {
-        pauseTimerEl.style.color = 'green';
-        pauseTimerEl.textContent = 'MOVE!';
+    function getRandomSong() {
+      if (usedIndexes.size >= songs.length) {
+        usedIndexes.clear();
+        lastIndex = null;
       }
-      playPauseBtn.textContent = 'Pause';
-    });
-
-    audio.addEventListener('pause', () => {
-      if (!hasStarted) return;
-      playPauseBtn.textContent = 'Play';
-      if (isRewindPlayback) return;
-      let rem = 10;
-      pauseTimerEl.style.color = 'red';
-      pauseTimerEl.textContent = rem;
-      clearInterval(pauseCountdown);
-      pauseCountdown = setInterval(() => {
-        rem--;
-        if (rem >= 0) pauseTimerEl.textContent = rem;
-        else { clearInterval(pauseCountdown); pauseTimerEl.textContent = 'FINISH THE LYRIC'; }
-      }, 1000);
-    });
-
-    audio.addEventListener('ended', () => {
-      if (currentIndex < songs.length - 1) playIndex(++currentIndex);
-    });
-
-    rewindBtn.addEventListener('click', () => {
-      clearInterval(pauseCountdown);
-      isRewindPlayback = true;
-      const sec = 5;
-      audio.currentTime = Math.max(0, audio.currentTime - sec);
-      pauseTimerEl.style.color = 'orange';
-      pauseTimerEl.textContent = 'FINISH THE LYRIC';
-      audio.play();
-      playPauseBtn.textContent = 'Pause';
-      setTimeout(() => { audio.pause(); isRewindPlayback = false; }, sec * 1000);
-    });
-
-    playPauseBtn.addEventListener('click', () => {
-      if (audio.paused) { isRewindPlayback = false; audio.play(); } else audio.pause();
-    });
-
-    nextBtn.addEventListener('click', () => {
-      if (currentIndex < songs.length - 1) playIndex(++currentIndex);
-    });
-
-    resetBtn.addEventListener('click', () => {
-      shuffle(songs);
-      currentIndex = 0;
-      updateInfo();
-      playIndex(currentIndex);
-    });
-
-    async function playIndex(idx) {
-      updateInfo();
-      const s = songs[idx];
-      if (!s.preview) {
-        try {
-          const q = encodeURIComponent(`${s.title} ${s.artist}`);
-          const r = await fetch(`https://corsproxy.io/?https://api.deezer.com/search?q=${q}`);
-          const j = await r.json();
-          s.preview = j.data?.[0]?.preview || '';
-        } catch {
-          alert('Error fetching preview');
-          return;
+      const valid = [];
+      for (let i = 0; i < songs.length; i++) {
+        if (!usedIndexes.has(i) && (lastIndex === null || Math.abs(i - lastIndex) > 6)) {
+          valid.push(i);
         }
       }
-      if (!s.preview) { alert(`No preview for: ${s.title}`); return; }
-      audio.src = s.preview;
-      await audio.play();
-      s.played = true;
+      const pool = valid.length
+        ? valid
+        : [...Array(songs.length).keys()].filter(i => !usedIndexes.has(i));
+      const idx = pool[Math.floor(Math.random() * pool.length)];
+      usedIndexes.add(idx);
+      lastIndex = idx;
+      updateRemaining();
+      return songs[idx];
+    }
+
+    function getPreviewOrNext() {
+      return new Promise((resolve, reject) => {
+        const song = getRandomSong();
+        if (!song) return reject('No songs available');
+        const q = `track:\"${song.title}\" artist:\"${song.artist}\"`;
+        const cb = 'dzCb_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        const script = document.createElement('script');
+        window[cb] = data => {
+          document.body.removeChild(script);
+          delete window[cb];
+          if (data.data && data.data.length) {
+            resolve({ song, preview: data.data[0].preview });
+          } else {
+            getPreviewOrNext().then(resolve).catch(reject);
+          }
+        };
+        script.src = `https://api.deezer.com/search?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}`;
+        script.onerror = () => {
+          document.body.removeChild(script);
+          delete window[cb];
+          getPreviewOrNext().then(resolve).catch(reject);
+        };
+        document.body.appendChild(script);
+      });
+    }
+
+    function fadeIn(audio) {
+      audio._fadingOut = false;
+      audio.volume = 0;
+      const step = 1 / (FADE_DURATION * 50);
+      const interval = setInterval(() => {
+        if (audio.volume < 1 && !audio._fadingOut) {
+          audio.volume = Math.min(audio.volume + step, 1);
+        } else {
+          audio.volume = 1;
+          clearInterval(interval);
+        }
+      }, 20);
+    }
+
+    function fadeOut(audio) {
+      audio._fadingOut = true;
+      const step = 1 / (FADE_DURATION * 50);
+      const interval = setInterval(() => {
+        if (audio.volume > 0) {
+          audio.volume = Math.max(audio.volume - step, 0);
+        } else {
+          audio.volume = 0;
+          clearInterval(interval);
+        }
+      }, 20);
+    }
+
+    function setupEvents() {
+      [audioA, audioB].forEach(audio => {
+        audio.addEventListener('timeupdate', () => {
+          const progress = audio === audioA ? progressA : progressB;
+          const timeEl = audio === audioA ? timeA : timeB;
+          updateTimeDisplay(audio, progress, timeEl);
+          if (audio.currentTime >= 28) {
+            const other = audio === audioA ? audioB : audioA;
+            if (other.paused) other.play();
+          }
+        });
+        audio.addEventListener('play', () => {
+          lastPlayed = audio;
+          if (audio.currentTime === 0) fadeIn(audio); else audio.volume = 1;
+        });
+      });
+      audioA.addEventListener('ended', () => loadNext('A'));
+      audioB.addEventListener('ended', () => loadNext('B'));
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      audioA = document.getElementById('audioA');
+      audioB = document.getElementById('audioB');
+      metaA = document.getElementById('trackA-info');
+      metaB = document.getElementById('trackB-info');
+      progressA = document.getElementById('progressA');
+      progressB = document.getElementById('progressB');
+      timeA = document.getElementById('timeA');
+      timeB = document.getElementById('timeB');
+      rewindBtn = document.getElementById('rewindBtn');
+      playBtn = document.getElementById('playBtn');
+      pauseBtn = document.getElementById('pauseBtn');
+      nextBtn = document.getElementById('nextBtn');
+      resetBtn = document.getElementById('resetBtn');
+      remainingEl = document.getElementById('remainingCount');
+
+      rewindBtn.addEventListener('click', () => {
+        const track = lastPlayed || audioA;
+        clearTimeout(rewindTimeout);
+        track.currentTime = Math.max(0, track.currentTime - 5);
+        track.play();
+        rewindTimeout = setTimeout(() => track.pause(), 5000);
+      });
+
+      playBtn.addEventListener('click', () => {
+        const track = lastPlayed || audioA;
+        track.play();
+      });
+
+      pauseBtn.addEventListener('click', () => {
+        audioA.pause();
+        audioB.pause();
+        clearTimeout(rewindTimeout);
+      });
+
+      nextBtn.addEventListener('click', () => {
+        const current = lastPlayed || audioA;
+        const other = current === audioA ? audioB : audioA;
+        const currentTrack = current === audioA ? 'A' : 'B';
+        loadNext(currentTrack).then(() => {
+          current.pause();
+          other.play();
+          lastPlayed = other;
+        });
+      });
+
+      resetBtn.addEventListener('click', () => {
+        usedIndexes.clear();
+        lastIndex = null;
+        updateRemaining();
+      });
+
+      Papa.parse(csvUrl, { download: true, skipEmptyLines: true, header: false,
+        complete: (res) => {
+          songs = res.data.map(r => ({ title: r[0].trim(), artist: r[1].trim() }))
+                      .filter(s => s.title && s.artist);
+          updateRemaining();
+          initPlayer();
+        }
+      });
+    });
+
+    function initPlayer() {
+      Promise.all([getPreviewOrNext(), getPreviewOrNext()])
+        .then(([a, b]) => {
+          metaA.textContent = `${a.song.title} - ${a.song.artist}`;
+          audioA.src = a.preview;
+          audioA.play();
+          metaB.textContent = `${b.song.title} - ${b.song.artist}`;
+          audioB.src = b.preview;
+          setupEvents();
+        })
+        .catch(err => console.error('Initialization error:', err));
+    }
+
+    function loadNext(track) {
+      const audio = track === 'A' ? audioA : audioB;
+      const meta = track === 'A' ? metaA : metaB;
+      const prog = track === 'A' ? progressA : progressB;
+      const timeEl = track === 'A' ? timeA : timeB;
+      return getPreviewOrNext().then(res => {
+        meta.textContent = `${res.song.title} - ${res.song.artist}`;
+        audio.src = res.preview;
+        prog.value = 0;
+        timeEl.textContent = '0:00 / 0:00';
+        audio.volume = 0;
+      }).catch(err => console.error('Load next error:', err));
     }
   </script>
 </body>
 </html>
+
