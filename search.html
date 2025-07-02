@@ -1,116 +1,135 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Finish the Lyric Musical Chairs</title>
+  <title>Finish the Lyric Musical Chairs - Search with Google Sheets</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
-    h1 { text-align: center; font-size: 1.8rem; margin-bottom: 20px; }
-    #search-container { display: flex; gap: 10px; margin-bottom: 20px; }
-    #searchBar { flex: 1; padding: 10px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
-    #searchBtn { padding: 10px 20px; font-size: 1rem; border: none; border-radius: 4px; background-color: #007BFF; color: white; cursor: pointer; }
-    #searchBtn:disabled { background-color: #ccc; cursor: default; }
-    .song { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
-    .song-title { font-size: 1rem; }
-    .add-btn { padding: 6px 12px; font-size: 0.9rem; border: none; border-radius: 4px; background-color: #28a745; color: white; cursor: pointer; }
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+    h1 { text-align: center; }
+    #searchBar { width: calc(100% - 110px); padding: 10px; font-size: 1rem; }
+    #searchButton { padding: 10px 20px; font-size: 1rem; }
+    .song-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #ddd; }
+    .song-title { font-weight: bold; }
+    .play-btn, .add-btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; }
+    .play-btn.playing { background-color: #4CAF50; color: white; }
+    .add-btn { background-color: #007BFF; color: white; margin-left: 8px; }
     .add-btn:disabled { background-color: #ccc; cursor: default; }
+    .add-btn.added { background-color: #28a745; color: white; }
   </style>
 </head>
 <body>
-  <h1>Finish the Lyric Musical Chairs</h1>
-  <div id="search-container">
-    <input id="searchBar" type="text" placeholder="Search song or artist...">
-    <button id="searchBtn">Search</button>
+  <h1>Search & Add Song to Google Sheet v4</h1>
+  <div>
+    <input id="searchBar" type="text" placeholder="Search for a song or artist" />
+    <button id="searchButton">Search</button>
   </div>
   <div id="results"></div>
 
   <script>
-    // GitHub configuration
-    const GITHUB_OWNER = 'tlgsquared122';
-    const GITHUB_REPO  = 'lyric musicalchairs';
-    const FILE_PATH    = 'songs_list.csv';
-    const BRANCH       = 'main';
-    const GITHUB_TOKEN = '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'; // ⚠️ Visible to anyone
+    const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzghaSkxoVM55BOtQzQpOz4mbO5sMioKxmrsSXgvZSuLzX7IQh5_0w0Xt3escMY4UBfRA/exec';
 
-    const searchBtn = document.getElementById('searchBtn');
-    const searchBar = document.getElementById('searchBar');
-    const resultsDiv = document.getElementById('results');
-
-    searchBtn.addEventListener('click', () => {
-      const query = searchBar.value.trim();
-      if (!query) return;
-      searchBtn.disabled = true;
-      searchBtn.textContent = 'Searching...';
-      const script = document.createElement('script');
-      script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=10&output=jsonp&callback=showResults`;
-      document.body.appendChild(script);
+    document.getElementById('searchButton').addEventListener('click', searchSongs);
+    document.getElementById('searchBar').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        searchSongs();
+      }
     });
 
-    function showResults(response) {
-      searchBtn.disabled = false;
-      searchBtn.textContent = 'Search';
+    let currentAudio = null;
+    let currentButton = null;
+
+    function searchSongs() {
+      const query = document.getElementById('searchBar').value.trim();
+      if (!query) return;
+      const script = document.createElement('script');
+      script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&output=jsonp&callback=displayResults`;
+      document.body.appendChild(script);
+    }
+
+    function displayResults(response) {
+      const resultsDiv = document.getElementById('results');
       resultsDiv.innerHTML = '';
       if (!response.data || response.data.length === 0) {
         resultsDiv.textContent = 'No results found.';
         return;
       }
-      response.data.forEach(track => {
-        const div = document.createElement('div');
-        div.className = 'song';
 
-        const titleSpan = document.createElement('span');
-        titleSpan.className = 'song-title';
-        titleSpan.textContent = `${track.title} — ${track.artist.name}`;
+      const tracks = response.data.slice(0, 15); // Limit to 15 results
+
+      tracks.forEach(track => {
+        const item = document.createElement('div');
+        item.className = 'song-item';
+
+        const info = document.createElement('div');
+        info.innerHTML = `<span class="song-title">${track.title}</span> — ${track.artist.name}`;
+
+        const controls = document.createElement('div');
+
+        const playBtn = document.createElement('button');
+        playBtn.className = 'play-btn';
+        playBtn.textContent = 'Play';
+        playBtn.addEventListener('click', () => togglePlay(track.preview, playBtn));
 
         const addBtn = document.createElement('button');
         addBtn.className = 'add-btn';
-        addBtn.textContent = 'Add to CSV';
-        addBtn.addEventListener('click', () => addToCSV(track, addBtn));
+        addBtn.textContent = 'Add to Sheet';
+        addBtn.addEventListener('click', () => addToSheetJsonp(track, addBtn));
 
-        div.appendChild(titleSpan);
-        div.appendChild(addBtn);
-        resultsDiv.appendChild(div);
+        controls.appendChild(playBtn);
+        controls.appendChild(addBtn);
+        item.appendChild(info);
+        item.appendChild(controls);
+        resultsDiv.appendChild(item);
       });
     }
 
-    async function addToCSV(track, button) {
-      button.disabled = true;
-      button.textContent = 'Updating...';
-      try {
-        const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${encodeURIComponent(GITHUB_REPO)}/contents/${FILE_PATH}?ref=${BRANCH}`;
-        // Fetch content and metadata
-        const [rawRes, metaRes] = await Promise.all([
-          fetch(apiUrl, { headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3.raw' } }),
-          fetch(apiUrl, { headers: { Authorization: `token ${GITHUB_TOKEN}` } })
-        ]);
-        if (!rawRes.ok || !metaRes.ok) throw new Error('Failed to fetch existing CSV');
-        const csvText = await rawRes.text();
-        const meta = await metaRes.json();
-
-        // Append new row
-        const { title, artist } = track;
-        const newLine = `\n"${title.replace(/"/g, '""')}","${artist.name.replace(/"/g, '""')}"`;
-        const updatedCsv = csvText.trim() + newLine;
-
-        // Commit update
-        const contentBase64 = btoa(unescape(encodeURIComponent(updatedCsv)));
-        const commitRes = await fetch(apiUrl, {
-          method: 'PUT',
-          headers: { Authorization: `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: `Add ${title} by ${track.artist.name}`, content: contentBase64, sha: meta.sha, branch: BRANCH })
-        });
-        if (!commitRes.ok) throw new Error('Commit failed');
-
-        button.textContent = 'Added ✓';
-      } catch (err) {
-        console.error(err);
-        button.disabled = false;
-        button.textContent = 'Error';
-        alert('Error updating CSV: ' + err.message);
+    function togglePlay(previewUrl, button) {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentButton.textContent = 'Play';
+        currentButton.classList.remove('playing');
       }
+      if (button === currentButton) {
+        currentAudio = null;
+        currentButton = null;
+        return;
+      }
+      const audio = new Audio(previewUrl);
+      audio.play();
+      button.textContent = 'Pause';
+      button.classList.add('playing');
+      currentAudio = audio;
+      currentButton = button;
+      audio.addEventListener('ended', () => {
+        button.textContent = 'Play';
+        button.classList.remove('playing');
+        currentAudio = null;
+        currentButton = null;
+      });
+    }
+
+    function addToSheetJsonp(track, button) {
+      const callbackName = 'cb_' + Date.now();
+      window[callbackName] = function(response) {
+        if (response.status === 'success') {
+          button.disabled = true;
+          button.textContent = 'Added';
+          button.classList.add('added');
+        } else {
+          alert('Failed to add song: ' + (response.message || 'Unknown error'));
+        }
+        delete window[callbackName];
+        document.body.removeChild(script);
+      };
+      const params = new URLSearchParams({
+        title: track.title,
+        artist: track.artist.name,
+        callback: callbackName
+      });
+      const script = document.createElement('script');
+      script.src = `${WEBAPP_URL}?${params.toString()}`;
+      document.body.appendChild(script);
     }
   </script>
-
 </body>
 </html>
