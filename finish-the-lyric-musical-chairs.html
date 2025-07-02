@@ -8,6 +8,22 @@
     body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
     #tagline-container img { max-width: 100%; height: auto; display: block; margin: 0 auto 20px; }
     h1 { text-align: center; }
+    /* Unlock button styling */
+    #unlockBtn {
+      display: block;
+      margin: 20px auto;
+      padding: 15px 30px;
+      font-size: 1.2rem;
+      border-radius: 8px;
+      border: none;
+      background: #28a745;
+      color: white;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      -webkit-appearance: none;
+      appearance: none;
+    }
     .tracks { display: flex; gap: 20px; justify-content: space-between; }
     .track-container { flex: 1; }
     .track-info { text-align: center; margin-bottom: 5px; }
@@ -34,19 +50,14 @@
       -webkit-appearance: none;
       appearance: none;
     }
-    /* Remove hover effect on touch devices */
     @media (hover: none) {
-      .controls button:hover, .remaining-container button:hover {
-        background: #007bff;
-      }
+      .controls button:hover, .remaining-container button:hover { background: #007bff; }
     }
-    /* Keep background on active, remove stuck darker state */
     .controls button:active, .remaining-container button:active {
       background: #0056b3 !important;
       opacity: 1 !important;
     }
     .controls button:focus, .remaining-container button:focus { outline: none; }
-    /* Smaller reset button */
     #resetBtn {
       padding: 8px 16px;
       font-size: 0.9rem;
@@ -62,6 +73,8 @@
     <img src="https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/tagline.png" alt="Your Tagline" onerror="this.style.display='none';">
   </div>
   <h1>Finish the Lyric Musical Chairs</h1>
+  <!-- Unlock button for iOS audio requirement -->
+  <button id="unlockBtn">Tap to Unlock Audio</button>
   <div class="tracks">
     <div class="track-container" id="trackA-container">
       <div class="track-info">
@@ -93,176 +106,182 @@
     <button id="resetBtn">Reset Songs</button>
   </div>
   <script>
-    // Unlock Web Audio API on first interaction
+    // Unlock Web Audio API and prime both audio elements
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const audioCtx = new AudioContext();
-    function unlockAudio() {
+    let audioA, audioB, lastPlayed = null, started = false;
+
+    function unlockAudioAndPrime() {
       if (audioCtx.state === 'suspended') audioCtx.resume();
-      document.removeEventListener('touchend', unlockAudio);
-      document.removeEventListener('click', unlockAudio);
-    }
-    document.addEventListener('touchend', unlockAudio, false);
-    document.addEventListener('click', unlockAudio, false);
-
-    var csvUrl = 'https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/top_songs_randomized.csv';
-    var songs = [], usedIndexes = new Set(), lastIndex = null;
-    var audioA, audioB, metaA, metaB, progressA, progressB, timeA, timeB;
-    var rewindBtn, playBtn, pauseBtn, nextBtn, resetBtn, remainingEl;
-    var lastPlayed = null, rewindTimeout, FADE_DURATION = 2;
-
-    function formatTime(sec) {
-      var m = Math.floor(sec/60), s = Math.floor(sec%60).toString().padStart(2,'0');
-      return m + ':' + s;
-    }
-
-    function updateTimeDisplay(audio, progress, timeEl) {
-      if (audio.duration) {
-        progress.max = audio.duration;
-        progress.value = audio.currentTime;
-        timeEl.textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration);
-        if (audio.duration - audio.currentTime <= FADE_DURATION && !audio._fadingOut) fadeOut(audio);
-      }
-    }
-
-    function updateRemaining() {
-      remainingEl.textContent = 'Remaining songs: ' + (songs.length - usedIndexes.size);
-    }
-
-    function getRandomSong() {
-      if (usedIndexes.size >= songs.length) { usedIndexes.clear(); lastIndex = null; }
-      var valid = [];
-      for (var i = 0; i < songs.length; i++) {
-        if (!usedIndexes.has(i) && (lastIndex === null || Math.abs(i - lastIndex) > 6)) valid.push(i);
-      }
-      var pool = valid.length ? valid : Array.from({length: songs.length}, (_, i) => i).filter(function(i) { return !usedIndexes.has(i); });
-      var idx = pool[Math.floor(Math.random() * pool.length)];
-      usedIndexes.add(idx);
-      lastIndex = idx;
-      updateRemaining();
-      return songs[idx];
-    }
-
-    function getPreviewOrNext() {
-      return new Promise(function(resolve, reject) {
-        var song = getRandomSong();
-        if (!song) return reject('No songs available');
-        var q = 'track:"' + song.title + '" artist:"' + song.artist + '"';
-        var cb = 'dzCb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
-        var script = document.createElement('script');
-        window[cb] = function(data) {
-          document.body.removeChild(script);
-          delete window[cb];
-          if (data.data && data.data.length) resolve({ song: song, preview: data.data[0].preview });
-          else getPreviewOrNext().then(resolve).catch(reject);
-        };
-        script.src = 'https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&output=jsonp&callback=' + cb;
-        script.onerror = function() {
-          document.body.removeChild(script);
-          delete window[cb];
-          getPreviewOrNext().then(resolve).catch(reject);
-        };
-        document.body.appendChild(script);
-      });
-    }
-
-    function fadeIn(audio) {
-      audio._fadingOut = false;
-      audio.volume = 0;
-      var step = 1 / (FADE_DURATION * 50);
-      var interval = setInterval(function() {
-        if (audio.volume < 1 && !audio._fadingOut) {
-          audio.volume = Math.min(audio.volume + step, 1);
-        } else {
-          audio.volume = 1;
-          clearInterval(interval);
+      [audioA, audioB].forEach(a => {
+        if (a && a.src) {
+          a.play().then(() => a.pause()).catch(() => {});
         }
-      }, 20);
-    }
-
-    function fadeOut(audio) {
-      audio._fadingOut = true;
-      var step = 1 / (FADE_DURATION * 50);
-      var interval = setInterval(function() {
-        if (audio.volume > 0) {
-          audio.volume = Math.max(audio.volume - step, 0);
-        } else {
-          audio.volume = 0;
-          clearInterval(interval);
-        }
-      }, 20);
-    }
-
-    function setupEvents() {
-      [audioA, audioB].forEach(function(a) {
-        a.addEventListener('timeupdate', function() {
-          var p = a === audioA ? progressA : progressB;
-          var t = a === audioA ? timeA : timeB;
-          updateTimeDisplay(a, p, t);
-          if (a.currentTime >= 28) {
-            var o = a === audioA ? audioB : audioA;
-            if (o.paused) o.play();
-          }
-        });
-        a.addEventListener('play', function() {
-          lastPlayed = a;
-          if (a.currentTime === 0) fadeIn(a);
-          else a.volume = 1;
-        });
       });
-      audioA.addEventListener('ended', function() { loadNext('A'); });
-      audioB.addEventListener('ended', function() { loadNext('B'); });
+      lastPlayed = null; // ensure next play picks Track A
+      document.getElementById('unlockBtn').style.display = 'none';
+      document.removeEventListener('touchend', unlockAudioAndPrime, true);
+      document.removeEventListener('click', unlockAudioAndPrime, true);
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', () => {
       audioA = document.getElementById('audioA');
       audioB = document.getElementById('audioB');
-      metaA = document.getElementById('trackA-info');
-      metaB = document.getElementById('trackB-info');
-      progressA = document.getElementById('progressA');
-      progressB = document.getElementById('progressB');
-      timeA = document.getElementById('timeA');
-      timeB = document.getElementById('timeB');
-      rewindBtn = document.getElementById('rewindBtn');
-      playBtn = document.getElementById('playBtn');
-      pauseBtn = document.getElementById('pauseBtn');
-      nextBtn = document.getElementById('nextBtn');
-      resetBtn = document.getElementById('resetBtn');
-      remainingEl = document.getElementById('remainingCount');
-
-      ['touchstart','touchend','click'].forEach(function(evt) {
-        rewindBtn.addEventListener(evt, function() { this.blur(); var tr = lastPlayed || audioA; clearTimeout(rewindTimeout); tr.currentTime = Math.max(0, tr.currentTime - 5); tr.play(); rewindTimeout = setTimeout(function() { tr.pause(); }, 5000); });
-        playBtn.addEventListener(evt, function() { this.blur(); (lastPlayed || audioA).play(); });
-        pauseBtn.addEventListener(evt, function() { this.blur(); audioA.pause(); audioB.pause(); clearTimeout(rewindTimeout); });
-        nextBtn.addEventListener(evt, function() { this.blur(); var c = lastPlayed || audioA; var o = c === audioA ? audioB : audioA; var id = c === audioA ? 'A' : 'B'; loadNext(id).then(function() { c.pause(); o.play(); lastPlayed = o; }); });
-        resetBtn.addEventListener(evt, function() { this.blur(); usedIndexes.clear(); lastIndex = null; updateRemaining(); });
-      });
-
-      Papa.parse(csvUrl, { download: true, skipEmptyLines: true, header: false, complete: function(res) {
-          songs = res.data.map(function(r) { return { title: r[0].trim(), artist: r[1].trim() }; }).filter(function(s) { return s.title && s.artist; });
-          updateRemaining(); initPlayer();
-        }
-      });
+      const unlockBtn = document.getElementById('unlockBtn');
+      unlockBtn.addEventListener('click', unlockAudioAndPrime);
+      unlockBtn.addEventListener('touchend', unlockAudioAndPrime);
+      document.addEventListener('touchend', unlockAudioAndPrime, true);
+      document.addEventListener('click', unlockAudioAndPrime, true);
+      initFullPlayer();
     });
 
-    function initPlayer() {
-      Promise.all([getPreviewOrNext(), getPreviewOrNext()]).then(function(results) {
-        var a = results[0], b = results[1];
-        metaA.textContent = a.song.title + ' - ' + a.song.artist;
-        audioA.src = a.preview; audioA.play();
-        metaB.textContent = b.song.title + ' - ' + b.song.artist;
-        audioB.src = b.preview; setupEvents();
-      }).catch(function(err) { console.error('Initialization error:', err); });
-    }
+    function initFullPlayer() {
+      const csvUrl = 'https://raw.githubusercontent.com/tlgsquared122/lyricmusicalchairs/main/top_songs_randomized.csv';
+      let songs = [], usedIndexes = new Set(), lastIndex = null;
+      const metaA = document.getElementById('trackA-info');
+      const metaB = document.getElementById('trackB-info');
+      const progressA = document.getElementById('progressA');
+      const progressB = document.getElementById('progressB');
+      const timeA = document.getElementById('timeA');
+      const timeB = document.getElementById('timeB');
+      const rewindBtn = document.getElementById('rewindBtn');
+      const playBtn = document.getElementById('playBtn');
+      const pauseBtn = document.getElementById('pauseBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const remainingEl = document.getElementById('remainingCount');
+      let rewindTimeout; const FADE_DURATION = 2;
 
-    function loadNext(track) {
-      var audio = track === 'A' ? audioA : audioB;
-      var meta  = track === 'A' ? metaA : metaB;
-      var prog  = track === 'A' ? progressA : progressB;
-      var tm    = track === 'A' ? timeA : timeB;
-      return getPreviewOrNext().then(function(res) {
-        meta.textContent = res.song.title + ' - ' + res.song.artist;
-        audio.src = res.preview; prog.value = 0; tm.textContent = '0:00 / 0:00'; audio.volume = 0;
-      }).catch(function(err) { console.error('Load next error:', err); });
+      function formatTime(sec) {
+        const m = Math.floor(sec/60), s = Math.floor(sec%60).toString().padStart(2,'0');
+        return m + ':' + s;
+      }
+      function updateTimeDisplay(audio, progress, timeEl) {
+        if (audio.duration) {
+          progress.max = audio.duration;
+          progress.value = audio.currentTime;
+          timeEl.textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration);
+          if (audio.duration - audio.currentTime <= FADE_DURATION && !audio._fadingOut) fadeOut(audio);
+        }
+      }
+      function updateRemaining() {
+        remainingEl.textContent = 'Remaining songs: ' + (songs.length - usedIndexes.size);
+      }
+      function getRandomSong() {
+        if (usedIndexes.size >= songs.length) { usedIndexes.clear(); lastIndex = null; }
+        let valid = [];
+        for (let i = 0; i < songs.length; i++) {
+          if (!usedIndexes.has(i) && (lastIndex === null || Math.abs(i - lastIndex) > 6)) valid.push(i);
+        }
+        const pool = valid.length ? valid : songs.map((_,i)=>i).filter(i=>!usedIndexes.has(i));
+        const idx = pool[Math.floor(Math.random() * pool.length)];
+        usedIndexes.add(idx); lastIndex = idx; updateRemaining();
+        return songs[idx];
+      }
+      function getPreviewOrNext() {
+        return new Promise((resolve, reject) => {
+          const song = getRandomSong();
+          if (!song) return reject('No songs available');
+          const q = 'track:"' + song.title + '" artist:"' + song.artist + '"';
+          const cb = 'dzCb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+          const script = document.createElement('script');
+          window[cb] = data => {
+            document.body.removeChild(script); delete window[cb];
+            if (data.data && data.data.length) resolve({ song, preview: data.data[0].preview });
+            else getPreviewOrNext().then(resolve).catch(reject);
+          };
+          script.src = 'https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&output=jsonp&callback=' + cb;
+          script.onerror = () => { document.body.removeChild(script); delete window[cb]; getPreviewOrNext().then(resolve).catch(reject); };
+          document.body.appendChild(script);
+        });
+      }
+      function fadeIn(audio) {
+        audio._fadingOut = false; audio.volume = 0;
+        const step = 1 / (FADE_DURATION * 50);
+        const interval = setInterval(() => {
+          if (audio.volume < 1 && !audio._fadingOut) audio.volume = Math.min(audio.volume + step, 1);
+          else { audio.volume = 1; clearInterval(interval); }
+        }, 20);
+      }
+      function fadeOut(audio) {
+        audio._fadingOut = true;
+        const step = 1 / (FADE_DURATION * 50);
+        const interval = setInterval(() => {
+          if (audio.volume > 0) audio.volume = Math.max(audio.volume - step, 0);
+          else { audio.volume = 0; clearInterval(interval); }
+        }, 20);
+      }
+      function setupEvents() {
+        [audioA, audioB].forEach(a => {
+          a.addEventListener('timeupdate', () => {
+            const p = a === audioA ? progressA : progressB;
+            const t = a === audioA ? timeA : timeB;
+            updateTimeDisplay(a, p, t);
+            if (a.currentTime >= 28) {
+              const o = a === audioA ? audioB : audioA;
+              if (o.paused) o.play();
+            }
+          });
+          a.addEventListener('play', () => { lastPlayed = a; if (a.currentTime === 0) fadeIn(a); else a.volume = 1; });
+        });
+        audioA.addEventListener('ended', () => loadNext('A'));
+        audioB.addEventListener('ended', () => loadNext('B'));
+      }
+      document.querySelectorAll('#rewindBtn, #playBtn, #pauseBtn, #nextBtn, #resetBtn').forEach(btn => {
+        ['touchstart','touchend','click'].forEach(evt => {
+          btn.addEventListener(evt, function() {
+            this.blur();
+            if (btn.id === 'rewindBtn') {
+              const tr = lastPlayed || audioA;
+              clearTimeout(rewindTimeout);
+              tr.currentTime = Math.max(0, tr.currentTime - 5);
+              tr.play();
+              rewindTimeout = setTimeout(() => tr.pause(), 5000);
+            } else if (btn.id === 'playBtn') {
+              if (!started) {
+                audioA.play();
+                started = true;
+              } else {
+                (lastPlayed || audioA).play();
+              }
+            } else if (btn.id === 'pauseBtn') {
+              audioA.pause(); audioB.pause(); clearTimeout(rewindTimeout);
+            } else if (btn.id === 'nextBtn') {
+              const c = lastPlayed || audioA;
+              const o = c === audioA ? audioB : audioA;
+              const id = c === audioA ? 'A' : 'B';
+              loadNext(id).then(() => { c.pause(); o.play(); lastPlayed = o; });
+            } else if (btn.id === 'resetBtn') {
+              usedIndexes.clear(); lastIndex = null; updateRemaining();
+            }
+          });
+        });
+      });
+      Papa.parse(csvUrl, { download: true, skipEmptyLines: true, header: false, complete: res => {
+        songs = res.data.map(r => ({ title: r[0].trim(), artist: r[1].trim() })).filter(s => s.title && s.artist);
+        updateRemaining();
+        Promise.all([getPreviewOrNext(), getPreviewOrNext()]).then(results => {
+          const [a, b] = results;
+          metaA.textContent = a.song.title + ' - ' + a.song.artist;
+          audioA.src = a.preview;
+          metaB.textContent = b.song.title + ' - ' + b.song.artist;
+          audioB.src = b.preview;
+          setupEvents();
+        }).catch(err => console.error('Initialization error:', err));
+      }});
+      function loadNext(track) {
+        const audio = track === 'A' ? audioA : audioB;
+        const meta = track === 'A' ? metaA : metaB;
+        const prog = track === 'A' ? progressA : progressB;
+        const tm = track === 'A' ? timeA : timeB;
+        return getPreviewOrNext().then(res => {
+          meta.textContent = res.song.title + ' - ' + res.song.artist;
+          audio.src = res.preview;
+          prog.value = 0;
+          tm.textContent = '0:00 / 0:00';
+          audio.volume = 0;
+        }).catch(err => console.error('Load next error:', err));
+      }
     }
   </script>
 </body>
