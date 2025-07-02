@@ -1,196 +1,118 @@
+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
+
 <!DOCTYPE html>
-<html>
+
+<html lang="en">
 <head>
-  <title>Song List Editor</title>
+  <meta charset="UTF-8">
+  <title>Finish the Lyric Musical Chairs</title>
   <style>
-    body {
-      font-family: sans-serif;
-      max-width: 600px;
-      margin: auto;
-      padding: 20px;
-    }
-    #player-section {
-      margin-bottom: 20px;
-    }
-    #search-bar {
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
-    #song-list {
-      max-height: 400px;
-      overflow-y: auto;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-    }
-    .song {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px;
-      border-bottom: 1px solid #ccc;
-      cursor: pointer;
-      transition: background-color 0.3s;
-    }
-    .song.playing {
-      background-color: #e0f7fa;
-    }
-    .song.played {
-      color: #999;
-    }
-    .info {
-      flex: 1;
-      margin-left: 10px;
-    }
-    .trash {
-      cursor: pointer;
-      color: red;
-      font-size: 20px;
-      margin-left: 10px;
-    }
-    #now-playing {
-      font-size: 1.1em;
-      margin-bottom: 8px;
-    }
-    #player {
-      width: 100%;
-    }
-    #reset-btn {
-      margin-bottom: 15px;
-      background-color: #eee;
-      padding: 8px 12px;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-    }
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+    h1 { text-align: center; font-size: 1.8rem; margin-bottom: 20px; }
+    #search-container { display: flex; gap: 10px; margin-bottom: 20px; }
+    #searchBar { flex: 1; padding: 10px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+    #searchBtn { padding: 10px 20px; font-size: 1rem; border: none; border-radius: 4px; background-color: #007BFF; color: white; cursor: pointer; }
+    #searchBtn:disabled { background-color: #ccc; cursor: default; }
+    .song { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
+    .song-title { font-size: 1rem; }
+    .add-btn { padding: 6px 12px; font-size: 0.9rem; border: none; border-radius: 4px; background-color: #28a745; color: white; cursor: pointer; }
+    .add-btn:disabled { background-color: #ccc; cursor: default; }
   </style>
 </head>
 <body>
-  <h1>Song List Editor</h1>
-
-  <div id="player-section">
-    <div id="now-playing">Now Playing: None</div>
-    <audio id="player" controls></audio>
+  <h1>Finish the Lyric Musical Chairs</h1>
+  <div id="search-container">
+    <input id="searchBar" type="text" placeholder="Search song or artist...">
+    <button id="searchBtn">Search</button>
   </div>
-
-  <input type="text" id="search-bar" placeholder="Search for a song or artist...">
-  <button id="reset-btn" onclick="resetHistory()">Reset Playback History</button>
-  <div id="song-list">Loading...</div>
+  <div id="results"></div>
 
   <script>
-    const SHEET_API = 'https://script.google.com/macros/s/AKfycbzUZ9REtmEEdi_w5wWuoKDrbFU9sudsAhsWlRBESJxvy3WR9yYF8rWYVe73MKjhHYDLSQ/exec';
-    const player = document.getElementById('player');
-    const nowPlaying = document.getElementById('now-playing');
-    const songList = document.getElementById('song-list');
-    const searchBar = document.getElementById('search-bar');
-    let currentPlayingElement = null;
-    const playedKey = 'playedSongs';
-    let playedSongs = new Set(JSON.parse(localStorage.getItem(playedKey)) || []);
+    // GitHub configuration
+    const GITHUB_OWNER = 'tlgsquared122';
+    const GITHUB_REPO  = 'lyric musicalchairs';
+    const FILE_PATH    = 'songs_list.csv';
+    const BRANCH       = 'main';
+    const GITHUB_TOKEN = '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'; // ⚠️ Visible to anyone
 
-    let allSongs = [];
+    const searchBtn = document.getElementById('searchBtn');
+    const searchBar = document.getElementById('searchBar');
+    const resultsDiv = document.getElementById('results');
 
-    async function fetchSongs() {
-      const res = await fetch(SHEET_API);
-      const songs = await res.json();
-      allSongs = songs;
-      renderSongs(allSongs);
-    }
-
-    function renderSongs(songs) {
-      songList.innerHTML = '';
-
-      songs.forEach(song => {
-        const key = `${song.Title}|${song.Artist}`;
-        const div = document.createElement('div');
-        div.className = 'song';
-        div.dataset.title = song.Title.toLowerCase();
-        div.dataset.artist = song.Artist.toLowerCase();
-
-        if (playedSongs.has(key)) {
-          div.classList.add('played');
-        }
-
-        div.onclick = async () => {
-          if (currentPlayingElement) {
-            currentPlayingElement.classList.remove('playing');
-            currentPlayingElement.classList.add('played');
-          }
-          div.classList.add('playing');
-          currentPlayingElement = div;
-
-          const deezerData = await searchDeezer(song.Title, song.Artist);
-          if (!deezerData) return;
-
-          player.src = deezerData.preview;
-          player.play();
-          nowPlaying.textContent = `Now Playing: ${song.Title} by ${song.Artist}`;
-
-          playedSongs.add(key);
-          localStorage.setItem(playedKey, JSON.stringify([...playedSongs]));
-        };
-
-        div.innerHTML = `
-          <div class="info">
-            <strong>${song.Title}</strong> by ${song.Artist}
-          </div>
-          <div class="trash" onclick="event.stopPropagation(); deleteSong(${song.index}, this)">🗑️</div>
-        `;
-
-        songList.appendChild(div);
-      });
-    }
-
-    searchBar.addEventListener('input', () => {
-      const query = searchBar.value.toLowerCase();
-      const filtered = allSongs.filter(song =>
-        song.Title.toLowerCase().includes(query) ||
-        song.Artist.toLowerCase().includes(query)
-      );
-      renderSongs(filtered);
+    searchBtn.addEventListener('click', () => {
+      const query = searchBar.value.trim();
+      if (!query) return;
+      searchBtn.disabled = true;
+      searchBtn.textContent = 'Searching...';
+      const script = document.createElement('script');
+      script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=10&output=jsonp&callback=showResults`;
+      document.body.appendChild(script);
     });
 
-    async function searchDeezer(title, artist) {
-      const query = encodeURIComponent(`${title} ${artist}`);
-      const url = `https://api.deezer.com/search?q=${query}&output=jsonp`;
+    function showResults(response) {
+      searchBtn.disabled = false;
+      searchBtn.textContent = 'Search';
+      resultsDiv.innerHTML = '';
+      if (!response.data || response.data.length === 0) {
+        resultsDiv.textContent = 'No results found.';
+        return;
+      }
+      response.data.forEach(track => {
+        const div = document.createElement('div');
+        div.className = 'song';
 
-      return new Promise((resolve) => {
-        const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
-        window[callbackName] = function(data) {
-          delete window[callbackName];
-          document.body.removeChild(script);
-          resolve(data.data?.[0] || null);
-        };
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'song-title';
+        titleSpan.textContent = `${track.title} — ${track.artist.name}`;
 
-        const script = document.createElement('script');
-        script.src = `${url}&callback=${callbackName}`;
-        document.body.appendChild(script);
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-btn';
+        addBtn.textContent = 'Add to CSV';
+        addBtn.addEventListener('click', () => addToCSV(track, addBtn));
+
+        div.appendChild(titleSpan);
+        div.appendChild(addBtn);
+        resultsDiv.appendChild(div);
       });
     }
 
-    async function deleteSong(index, el) {
-      const res = await fetch(SHEET_API, {
-        method: 'POST',
-        body: new URLSearchParams({ index })
-      });
-      if (res.ok) {
-        const songElement = el.closest('.song');
-        if (currentPlayingElement === songElement) {
-          player.pause();
-          player.src = '';
-          nowPlaying.textContent = 'Now Playing: None';
-        }
-        songElement.remove();
+    async function addToCSV(track, button) {
+      button.disabled = true;
+      button.textContent = 'Updating...';
+      try {
+        const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${encodeURIComponent(GITHUB_REPO)}/contents/${FILE_PATH}?ref=${BRANCH}`;
+        // Fetch content and metadata
+        const [rawRes, metaRes] = await Promise.all([
+          fetch(apiUrl, { headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3.raw' } }),
+          fetch(apiUrl, { headers: { Authorization: `token ${GITHUB_TOKEN}` } })
+        ]);
+        if (!rawRes.ok || !metaRes.ok) throw new Error('Failed to fetch existing CSV');
+        const csvText = await rawRes.text();
+        const meta = await metaRes.json();
+
+        // Append new row
+        const { title, artist } = track;
+        const newLine = `\n"${title.replace(/"/g, '""')}","${artist.name.replace(/"/g, '""')}"`;
+        const updatedCsv = csvText.trim() + newLine;
+
+        // Commit update
+        const contentBase64 = btoa(unescape(encodeURIComponent(updatedCsv)));
+        const commitRes = await fetch(apiUrl, {
+          method: 'PUT',
+          headers: { Authorization: `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: `Add ${title} by ${track.artist.name}`, content: contentBase64, sha: meta.sha, branch: BRANCH })
+        });
+        if (!commitRes.ok) throw new Error('Commit failed');
+
+        button.textContent = 'Added ✓';
+      } catch (err) {
+        console.error(err);
+        button.disabled = false;
+        button.textContent = 'Error';
+        alert('Error updating CSV: ' + err.message);
       }
     }
-
-    function resetHistory() {
-      localStorage.removeItem(playedKey);
-      playedSongs.clear();
-      document.querySelectorAll('.song.played').forEach(el => el.classList.remove('played'));
-    }
-
-    fetchSongs();
   </script>
+
 </body>
 </html>
