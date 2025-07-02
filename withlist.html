@@ -12,6 +12,12 @@
     #player-section {
       margin-bottom: 20px;
     }
+    #search-bar {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
     #song-list {
       max-height: 400px;
       overflow-y: auto;
@@ -68,6 +74,7 @@
     <audio id="player" controls></audio>
   </div>
 
+  <input type="text" id="search-bar" placeholder="Search for a song or artist...">
   <button id="reset-btn" onclick="resetHistory()">Reset Playback History</button>
   <div id="song-list">Loading...</div>
 
@@ -76,42 +83,50 @@
     const player = document.getElementById('player');
     const nowPlaying = document.getElementById('now-playing');
     const songList = document.getElementById('song-list');
+    const searchBar = document.getElementById('search-bar');
     let currentPlayingElement = null;
     const playedKey = 'playedSongs';
     let playedSongs = new Set(JSON.parse(localStorage.getItem(playedKey)) || []);
 
+    let allSongs = [];
+
     async function fetchSongs() {
       const res = await fetch(SHEET_API);
       const songs = await res.json();
+      allSongs = songs;
+      renderSongs(allSongs);
+    }
+
+    function renderSongs(songs) {
       songList.innerHTML = '';
 
-      for (const song of songs) {
-        const deezerData = await searchDeezer(song.Title, song.Artist);
-        if (!deezerData) continue;
-
+      songs.forEach(song => {
+        const key = `${song.Title}|${song.Artist}`;
         const div = document.createElement('div');
-        const songId = `${song.Title}|${song.Artist}`;
         div.className = 'song';
-        div.dataset.title = song.Title;
-        div.dataset.artist = song.Artist;
-        div.dataset.preview = deezerData.preview;
+        div.dataset.title = song.Title.toLowerCase();
+        div.dataset.artist = song.Artist.toLowerCase();
 
-        if (playedSongs.has(songId)) {
+        if (playedSongs.has(key)) {
           div.classList.add('played');
         }
 
-        div.onclick = () => {
+        div.onclick = async () => {
           if (currentPlayingElement) {
             currentPlayingElement.classList.remove('playing');
             currentPlayingElement.classList.add('played');
           }
           div.classList.add('playing');
           currentPlayingElement = div;
+
+          const deezerData = await searchDeezer(song.Title, song.Artist);
+          if (!deezerData) return;
+
           player.src = deezerData.preview;
           player.play();
           nowPlaying.textContent = `Now Playing: ${song.Title} by ${song.Artist}`;
 
-          playedSongs.add(songId);
+          playedSongs.add(key);
           localStorage.setItem(playedKey, JSON.stringify([...playedSongs]));
         };
 
@@ -123,8 +138,17 @@
         `;
 
         songList.appendChild(div);
-      }
+      });
     }
+
+    searchBar.addEventListener('input', () => {
+      const query = searchBar.value.toLowerCase();
+      const filtered = allSongs.filter(song =>
+        song.Title.toLowerCase().includes(query) ||
+        song.Artist.toLowerCase().includes(query)
+      );
+      renderSongs(filtered);
+    });
 
     async function searchDeezer(title, artist) {
       const query = encodeURIComponent(`${title} ${artist}`);
