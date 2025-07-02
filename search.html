@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>Finish the Lyric Musical Chairs - Search with Google Sheets</title>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
     h1 { text-align: center; }
@@ -19,7 +18,7 @@
   </style>
 </head>
 <body>
-  <h1>Search & Add Song to Google Sheet v3</h1>
+  <h1>Search & Add Song to Google Sheet v4</h1>
   <div>
     <input id="searchBar" type="text" placeholder="Search for a song or artist" />
     <button id="searchButton">Search</button>
@@ -27,6 +26,7 @@
   <div id="results"></div>
 
   <script>
+    const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzghaSkxoVM55BOtQzQpOz4mbO5sMioKxmrsSXgvZSuLzX7IQh5_0w0Xt3escMY4UBfRA/exec';
     document.getElementById('searchButton').addEventListener('click', searchSongs);
 
     let currentAudio = null;
@@ -64,7 +64,7 @@
         const addBtn = document.createElement('button');
         addBtn.className = 'add-btn';
         addBtn.textContent = 'Add to Sheet';
-        addBtn.addEventListener('click', () => addToSheet(track, addBtn));
+        addBtn.addEventListener('click', () => addToSheetJsonp(track, addBtn));
 
         controls.appendChild(playBtn);
         controls.appendChild(addBtn);
@@ -99,21 +99,27 @@
       });
     }
 
-    function addToSheet(track, button) {
-      axios.post('https://script.google.com/macros/s/AKfycbzghaSkxoVM55BOtQzQpOz4mbO5sMioKxmrsSXgvZSuLzX7IQh5_0w0Xt3escMY4UBfRA/exec', {
-        title: track.title,
-        artist: track.artist.name
-      }).then(response => {
-        if (response.data.status === 'success') {
+    function addToSheetJsonp(track, button) {
+      const callbackName = 'cb_' + Date.now();
+      window[callbackName] = function(response) {
+        if (response.status === 'success') {
           button.disabled = true;
           button.textContent = 'Added';
           button.classList.add('added');
         } else {
-          alert('Failed to add song to sheet.');
+          alert('Failed to add song: ' + (response.message || 'Unknown error'));
         }
-      }).catch(() => {
-        alert('Error connecting to Google Sheets.');
+        delete window[callbackName];
+        document.body.removeChild(script);
+      };
+      const params = new URLSearchParams({
+        title: track.title,
+        artist: track.artist.name,
+        callback: callbackName
       });
+      const script = document.createElement('script');
+      script.src = `${WEBAPP_URL}?${params.toString()}`;
+      document.body.appendChild(script);
     }
   </script>
 </body>
